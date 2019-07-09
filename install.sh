@@ -44,7 +44,7 @@ sed -i "/rasping start/,/rasping end/d" /etc/dhcpcd.conf
 echo "Installing files"
 for f in $(find $here/overlay -type f,l -printf "%P\n"); do 
     mkdir -p /${f%/*}
-    cp -v P $here/overlay/$f /$f
+    cp -v -P $here/overlay/$f /$f
 done
 
 # fix dnsmasq dhcp range
