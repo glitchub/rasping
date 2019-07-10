@@ -45,8 +45,8 @@ To install:
         
         git clone https://github.com/glitchub/rasping
 
-    Edit rasping/rasping.conf as desired, then run:
+    Edit the configuration section of rasping/Makefile as desired, then run:
     
-        sudo rasping/install.sh
+        make -C rasping
 
 The gateway is now ready to go, attach a usb ethernet dongle and reboot.        
