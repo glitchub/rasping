@@ -96,7 +96,7 @@ endif
 
 # dhcpcd gives static IP to eth1, and possibly to eth0
 /etc/dhcpcd.conf:
-	echo "\
+	printf "\
 # Raspberry Pi NAT Gateway\n\
 allowinterfaces eth0 eth1\n\
 ipv4only\n\
@@ -107,7 +107,7 @@ static ip_address=${LAN_IP}\n\
 nolink\n\
 " | sudo bash -c 'cat > $@'
 ifdef WAN_IP
-	echo "\
+	printf "\
 interface eth0\n\
 static ip_address=${WAN_IP}\n\
 static routers=${WAN_GW}\n\
