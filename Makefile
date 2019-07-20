@@ -45,35 +45,46 @@ endif
 PACKAGES=iptables-persistent dnsmasq
 
 # files to copy from overlay to the root
-COPY=$(shell find overlay -type f,l -printf "%P ")
+OVERLAY=$(shell find overlay -type f,l -printf "%P ")
 
 # files to generate
 GENERATE=/etc/iptables/rules.v4 /etc/iptables/rules.v6 /etc/dhcpcd.conf
 
 # recreate everything
-.PHONY: default ${PACKAGES} ${COPY} ${GENERATE}
+.PHONY: default PACKAGES ${OVERLAY} ${GENERATE}
 
 .PHONY: default
-default: ${PACKAGES} ${COPY} ${GENERATE}
+default: PACKAGES ${OVERLAY} ${GENERATE}
 
-# Install files from overlay to root
-${COPY}: ${PACKAGES}
+ifndef CLEAN
+# Install NEW files from overlay to root
+${OVERLAY}: PACKAGES
 	sudo mkdir -p /$(dir $@)
 	sudo cp -vP overlay/$@ /$@
 ifdef DHCP_RANGE
 	$(if $(filter etc/dnsmasq.d/rasping.conf,$@),echo "dhcp-range=${DHCP_RANGE}" | sudo bash -c 'cat >> /$@')
-endif
+endif        
+else
+# Delete overlay files
+${OVERLAY}:
+	sudo rm -f /$@
+endif        
 
+ifndef CLEAN
 # Install packages
-${PACKAGES}:
-	DEBIAN_FRONTEND=noninteractive sudo -E apt install $@
-
-.PHONY: ${GENERATE}
+PACKAGES:
+	DEBIAN_FRONTEND=noninteractive sudo -E apt install -y ${PACKAGES}
+else      
+# Remove packages
+PACKAGES: ${OVERLAY}
+	DEBIAN_FRONTEND=noninteractive sudo -E apt remove --autoremove --purge -y ${PACKAGES}
+endif        
 
 # configure NAT, block everything on the WAN except as defined by UNBLOCK or FORWARD
-/etc/iptables/rules.v4: ${PACKAGES}
+/etc/iptables/rules.v4: PACKAGES
 	sudo iptables -F
 	sudo iptables -F -tnat
+ifndef CLEAN        
 	sudo iptables -P INPUT DROP
 	sudo iptables -A INPUT -i lo -j ACCEPT
 	sudo iptables -A INPUT -i eth1 -j ACCEPT
@@ -86,18 +97,23 @@ ifdef FORWARD
 	for p in ${FORWARD}; do sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; done
 endif
 	sudo iptables-save -f $@
+endif
 
 # drop any IPv6 (it's also entirely turned off by sysctl)
-/etc/iptables/rules.v6: ${PACKAGES}
+/etc/iptables/rules.v6: PACKAGES
 	sudo ip6tables -F
+ifndef CLEAN        
 	sudo ip6tables -P INPUT DROP
 	sudo ip6tables -P FORWARD DROP
 	sudo ip6tables-save -f $@
+endif        
 
 # dhcpcd gives static IP to eth1, and possibly to eth0
 /etc/dhcpcd.conf:
+	sudo sed -i '/rasping start/,/rasping end/d' $@ # first delete the old
+ifndef CLEAN        
 	printf "\
-# Raspberry Pi NAT Gateway\n\
+# rasping start\n\
 allowinterfaces eth0 eth1\n\
 ipv4only\n\
 noipv4ll\n\
@@ -105,13 +121,19 @@ noalias\n\
 interface eth1\n\
 static ip_address=${LAN_IP}\n\
 nolink\n\
-" | sudo bash -c 'cat > $@'
+" | sudo bash -c 'cat >> $@'
 ifdef WAN_IP
 	printf "\
+# rasping start\n\
 interface eth0\n\
 static ip_address=${WAN_IP}\n\
 static routers=${WAN_GW}\n\
 static domain_name_server=${WAN_DNS}\n\
 nolink\n\
+# rasping end\n\
 " | sudo bash -c 'cat >> $@'
 endif
+endif
+
+.PHONY: clean
+clean:;make CLEAN=1
