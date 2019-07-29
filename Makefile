@@ -11,20 +11,21 @@
 # The USB ethernet is the gateware for the LAN, it always has a static IP.
 LAN_IP = 192.168.111.1
 
-# Define a range of IP addresses to assign via DHCP on the LAN, or comment this
-# out if all LAN devices use static IP.
+# Define a comma-separated range of IP addresses to assign via DHCP on the LAN,
+# or comment this out if all LAN devices use static IP. This string is passed
+# verbatim to dnsmasq.
 DHCP_RANGE = 192.168.111.128,192.168.111.254
 
-# Define TCP ports to allow on the WAN interface, or comment out to block all
-# ports. (Default is to allow ssh)
-UNBLOCK = 22
+# Define space-separated list of TCP ports to allow on the WAN interface, or
+# comment out to block all ports. (Default is to allow ssh)
+UNBLOCK = 22  
 
-# Define TCP ports to be forwarded from WAN to devices on the LAN, each in the
-# form "WAN_PORT=LAN_IP:LAN_PORT", or comment this out if no ports should be
-# forwarded.
-# Note WAN ports 32768 to 60999 are reserved by the kernel, these should be
-# avoided (cat /proc/sys/net/ipv4/ip_local_port_range).
-# FORWARD = 2210=192.168.111.10:22 2211=192.168.111.11:22
+# Define space-separated list of TCP ports to be forwarded to other hosts, each
+# element in the form "PORT=DESTIP:DESTPORT". Ports can be forwarded in either
+# direction, but you must explicitly unblock incoming WAN ports above.  Note
+# ports 32768 to 60999 are usually reserved by the kernel, these should be
+# avoided (cat /proc/sys/net/ipv4/ip_local_port_range).  
+# FORWARD = 61022=192.168.111.10:22 61080=172.16.128.1:80 61443=172.16.128.1:443
 
 # These params can also be passed on the make command line, eg: 
 #
@@ -61,7 +62,7 @@ ifndef CLEAN
 ${OVERLAY}: PACKAGES
 	sudo mkdir -p /$(dir $@)
 	sudo cp -vP overlay/$@ /$@
-ifdef DHCP_RANGE
+ifneq ($(strip ${DHCP_RANGE}),)
 	$(if $(filter etc/dnsmasq.d/rasping.conf,$@),echo "dhcp-range=${DHCP_RANGE}" | sudo bash -c 'cat >> /$@')
 endif        
 else
@@ -90,11 +91,11 @@ ifndef CLEAN
 	sudo iptables -A INPUT -i eth1 -j ACCEPT
 	sudo iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
 	sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-ifdef UNBLOCK
+ifneq ($(strip ${UNBLOCK}),)
 	for p in ${UNBLOCK}; do sudo iptables -A INPUT -p tcp --dport $$p -j ACCEPT; done
-endif     
-ifdef FORWARD
-	for p in ${FORWARD}; do sudo iptables -t nat -A PREROUTING -i eth0 -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; done
+endif   
+ifneq ($(strip ${FORWARD}),)
+	for p in ${FORWARD}; do sudo iptables -t nat -A PREROUTING -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; done
 endif
 	sudo iptables-save -f $@
 endif
@@ -122,7 +123,7 @@ interface eth1\n\
 static ip_address=${LAN_IP}\n\
 nolink\n\
 " | sudo bash -c 'cat >> $@'
-ifdef WAN_IP
+ifneq ($(strip ${WAN_IP}),)
 	printf "\
 # rasping start\n\
 interface eth0\n\
