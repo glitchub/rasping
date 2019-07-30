@@ -95,7 +95,11 @@ ifneq ($(strip ${UNBLOCK}),)
 	for p in ${UNBLOCK}; do sudo iptables -A INPUT -p tcp --dport $$p -j ACCEPT; done
 endif   
 ifneq ($(strip ${FORWARD}),)
-	for p in ${FORWARD}; do sudo iptables -t nat -A PREROUTING -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; done
+        # forward incoming and localhost
+	for p in ${FORWARD}; do \
+	   sudo iptables -t nat -A PREROUTING -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
+	   sudo iptables -t nat -A OUTPUT -o lo -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
+	done
 endif
 	sudo iptables-save -f $@
 endif
