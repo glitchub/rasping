@@ -1,0 +1,6 @@
+# Raspberry Pi NAT Gateway
+# Configure a bridge for the LAN
+
+[NetDev]
+Name=br0
+Kind=bridge

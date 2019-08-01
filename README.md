@@ -7,13 +7,12 @@ Physical configuration:
     The Pi's ethernet interface connects to the WAN. By default it expects to
     receive an address via DHCP, but can also be configiured to use static IP.
 
-    A USB ethernet dongle attachs to the LAN and gets a static IP address. By
+    The PI provides a LAN gateway on usb ethernet dongle, if attached, and via
+    Wifi if enabled.  The gateway has a pre-defined static IP address. By
     default, DHCP is served to the upper-half of the LAN IP range, the lower
-    half is not assigned and available for arbitrary static IP. The LAN
-    interface also provides DNS.
+    half is not assigned and available for arbitrary static IP. The LAN also
+    provides DNS.
 
-    The Pi acts as a NAT router and a DNS server.
-    
 To install:
 
     Download the SDcard image:
@@ -23,30 +22,38 @@ To install:
     Unzip and extract file 2019-06-20-raspbin-buster-lite.img (about 1.8GB). 
 
     Copy the img file to an 8GB SDcard using dd on linux or Win32DiskImager
-    on Windows.
+    on Windows, etc.
 
     Insert the card into the Pi, attach monitor, keyboard, and ethernet, then
     apply power (the ethernet must provide DHCP and internet access).
 
-    Wait for Pi to boot to login prompt, log in as user 'pi' with password
-    'raspberry'
-    
-    Run:
+    Wait for Pi to boot to login prompt. The default user is 'pi' with password
+    'raspberry'. Enter the following commands:
 
-        sudo passwd pi -- enter a new password (twice)
+        sudo systemctl enable ssh                           -- if SSH access is desired
+        
+        sudo raspi-config nonint do_configure_keyboard us   -- if you want to edit files from the Pi console (and your keyboard is 'us')
+        
+        sudo passwd pi                                      -- enter a new password 
 
-        sudo systemctl enable ssh
-    
-        sudo apt update -- answer 'yes' if requested
+        sudo apt -y update                                      
 
-        sudo apt -y upgrade
-
-        sudo apt -y install git
+        sudo apt -y upgrade                                 -- this may take a while    
+        
+        sudo apt -y install git                                     
         
         git clone https://github.com/glitchub/rasping
 
-    Edit the configuration section of rasping/Makefile as desired, then run:
-    
-        make -C rasping
+        sudo reboot                                             
+   
+    Wait for reboot, then log back in (with the new password) and perform:
 
-The gateway is now ready to go, attach a usb ethernet dongle and reboot.        
+        nano rasping/rasping.cfg                            -- edit the configuration as desired
+
+        make -C rasping                                     -- wait for "INSTALL COMPLETE"
+
+        sudo reboot
+
+The system will boot into the network gateway mode automatically. If you didn't
+enable wifi in the Makefile then you'll need to attach a usb ethernet dongle
+and attach to that.         
