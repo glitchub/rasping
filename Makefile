@@ -7,7 +7,7 @@ endif
 
 ifneq (${USER},root)
 # become root if not already
-default ${MAKECMDGOALS}:; sudo ${MAKE} ${MAKECMDGOALS} ${MAKEFLAGS}
+default ${MAKECMDGOALS}:; sudo -E ${MAKE} ${MAKECMDGOALS}
 else
 
 include rasping.cfg
