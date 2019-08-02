@@ -1,6 +1,4 @@
 # Raspberry Pi NAT Gateway
-# Attach eth2 to the LAN bridge (presumably a USB ethernet dongle)
-
 [Match]
 Name=eth2
 

@@ -137,6 +137,7 @@ ifndef CLEAN
 	    echo;\
 	    echo '[Network]';\
 	    echo 'Address=${LAN_IP}/24';\
+            echo 'ConfigureWithoutCarrier=true';\
 	} > $@
 endif
 
