@@ -34,8 +34,8 @@ ifndef CLEAN
 ifneq ($(strip ${LAN_SSID}),)
 	systemctl unmask hostapd
 	systemctl enable hostapd
-        @echo "INSTALL COMPLETE!"
 endif
+	@echo "INSTALL COMPLETE!"
 endif
 
 ifndef CLEAN
@@ -57,12 +57,15 @@ ${OVERLAY}: ${FILES}
 
 # Delete overlay before packages
 PACKAGES: ${OVERLAY}
+ifeq (${CLEAN},2)
 	DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y ${PACKAGES}
+endif
 endif
 
 # configure NAT, block everything on the WAN except as defined by UNBLOCK or FORWARD
 /etc/iptables/rules.v4:
 	iptables -F
+	iptables -P INPUT ACCEPT
 	iptables -F -tnat
 ifndef CLEAN
 	iptables -P INPUT DROP
@@ -75,8 +78,8 @@ endif
 ifneq ($(strip ${FORWARD}),)
         # forward incoming and localhost
 	for p in ${FORWARD}; do \
-	   iptables -t nat -A PREROUTING -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
-	   iptables -t nat -A OUTPUT -o lo -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
+	     iptables -t nat -A PREROUTING -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
+	     iptables -t nat -A OUTPUT -o lo -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
 	done
 endif
 	iptables-save -f $@
@@ -181,8 +184,12 @@ endif
 endif
 
 .PHONY: clean uninstall
-clean uninstall:
+clean:
 	${MAKE} CLEAN=1
+	@echo "CLEAN COMPLETE"
+
+uninstall:
+	${MAKE} CLEAN=2
 	@echo "UNINSTALL COMPLETE"
 
 endif
