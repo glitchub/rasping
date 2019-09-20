@@ -9,7 +9,7 @@
 PACKAGES=iptables-persistent $(if $(strip ${LAN_SSID}),hostapd)
 
 # packages to unconditionally remove
-PURGEPACKAGES=dnsmasq avahu-daemon
+PURGEPACKAGES=dnsmasq avahi-daemon
 
 # files to copy from overlay to the root
 OVERLAY=$(shell find overlay -type f,l -printf "%P ")
@@ -25,13 +25,13 @@ FILES+=/etc/dhcpcd.conf
 # legacu, delete
 PURGEFILES=/etc/dnsmasq.d/rasping.conf /etc/systemd/network/rasping-eth1.network /etc/systemd/network/rasping/eth2.network
 
-# apt install and remove
-INSTALL=DEBIAN_FRONTEND=noninteractive apt install -y
-REMOVE=DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y
+# apt install and remove functions (must be 'call'ed)
+INSTALL=DEBIAN_FRONTEND=noninteractive apt install -y $1
+REMOVE=DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y $1
 
-# systemctl enable and disable
-ENABLE=systemctl enable --now
-DISABLE=systemctl disable --now
+# systemctl enable and disable functions (must be 'call'ed)
+ENABLE=systemctl enable --now $1
+DISABLE=systemctl --quiet is-enabled $1 && systemctl disable --now $1 || true
 
 ifneq (${USER},root)
 # become root if not already
@@ -48,34 +48,32 @@ endif
 
 install: PACKAGES ${OVERLAY} ${FILES}
 	# delete legacy packages
-	${REMOVE} ${PURGEPACkAGES}
+	$(call REMOVE,${PURGEPACKAGES})
 	rm -rf ${PURGEFILES}
-
 ifndef CLEAN
-	${DISABLE} dhcpcd
+	$(call DISABLE,dhcpcd)
 ifneq ($(strip ${WAN_SSID}),)
-	${ENABLE} wpa_supplicant
+	$(call ENABLE,wpa_supplicant)
 else
-	${DISABLE} wpa_supplicant
+	$(call DISABLE,wpa_supplicant)
 endif
-	${ENABLE} systemd-networkd
+	$(call ENABLE,systemd-networkd)
 ifneq ($(strip ${LAN_SSID}),)
 	systemctl unmask hostapd
-	${ENABLE} hostapd
+	$(call ENABLE,hostapd)
 endif
 	@echo "INSTALL COMPLETE!"
 else
-	${DISABLE} wpa_supplicant
-	${DISABLE} hostapd
-	${DISABLE} systemd-networkd
-	${ENABLE} dhcpcd
-	@echo "CLEAN COMPLETE"
+	$(call DISABLE, wpa_supplicant)
+	$(call DISABLE,hostapd)
+	$(call DISABLE,systemd-networkd)
+	$(call ENABLE,dhcpcd)
 endif
 
 ifndef CLEAN
 # Install packages first
 PACKAGES:
-	${INSTALL} ${PACKAGES}
+	$(call INSTALL,${PACKAGES})
 
 # Install overlay after packages
 ${OVERLAY}: PACKAGES
@@ -92,7 +90,7 @@ ${OVERLAY}: ${FILES}
 # Delete overlay before packages
 PACKAGES: ${OVERLAY}
 ifeq (${CLEAN},2)
-	${REMOVE} ${PACKAGES}
+	$(call REMOVE,${PACKAGES})
 endif
 endif
 
