@@ -1,26 +1,29 @@
 # Raspberry PI NAT Gateway
 
 # Make sure we're running the right code
-ifeq ($(shell grep "Raspberry Pi reference 2019-06-20" /etc/rpi-issue),)
-$(error "Requires Raspberry Pi running 2019-06-20-raspbin-buster-lite.img")
-endif
+#feq ($(shell grep "Raspberry Pi reference 2019-06-20" /etc/rpi-issue),)
+#(error "Requires Raspberry Pi running 2019-06-20-raspbin-buster-lite.img")
+#ndif
 
 # package to install
 PACKAGES=iptables-persistent $(if $(strip ${LAN_SSID}),hostapd)
+
+# packages to unconditionally remove
+PURGEPACKAGES=dnsmasq avahu-daemon
 
 # files to copy from overlay to the root
 OVERLAY=$(shell find overlay -type f,l -printf "%P ")
 
 # files to generate or alter
 FILES=/etc/iptables/rules.v4 /etc/iptables/rules.v6
-FILES+=/etc/systemd/network/rasping-wan.network /etc/systemd/network/rasping-ethX.network /systemd/network/rasping-br0.network
+FILES+=/etc/systemd/network/rasping-wan.network /etc/systemd/network/rasping-lan.network /etc/systemd/network/rasping-br0.network
 FILES+=/etc/default/hostapd /etc/hostapd/rasping.conf
 
 # legacy, just cleanse
 FILES+=/etc/dhcpcd.conf
 
 # legacu, delete
-PURGE=/etc/dnsmasq.d/rasping.conf /etc/systemd/network/rasping-eth1.network /etc/systemd/network/rasping/eth2.network
+PURGEFILES=/etc/dnsmasq.d/rasping.conf /etc/systemd/network/rasping-eth1.network /etc/systemd/network/rasping/eth2.network
 
 # apt install and remove
 INSTALL=DEBIAN_FRONTEND=noninteractive apt install -y
@@ -45,23 +48,23 @@ endif
 
 install: PACKAGES ${OVERLAY} ${FILES}
 	# delete legacy packages
-	${REMOVE} dnsmasq
-	rm -rf ${PURGE}
+	${REMOVE} ${PURGEPACkAGES}
+	rm -rf ${PURGEFILES}
 
 ifndef CLEAN
-	${ENABLE} dhcpcd
-	${ENABLE} systemd-networkd
+	${DISABLE} dhcpcd
 ifneq ($(strip ${WAN_SSID}),)
 	${ENABLE} wpa_supplicant
 else
-	${DISABLE} --now wpa_supplicant
+	${DISABLE} wpa_supplicant
 endif
+	${ENABLE} systemd-networkd
 ifneq ($(strip ${LAN_SSID}),)
 	systemctl unmask hostapd
 	${ENABLE} hostapd
 endif
 	@echo "INSTALL COMPLETE!"
-ese
+else
 	${DISABLE} wpa_supplicant
 	${DISABLE} hostapd
 	${DISABLE} systemd-networkd
@@ -140,15 +143,16 @@ ifndef CLEAN
 		echo 'Name=eth0';\
 		echo;\
 		echo '[Network]';\
-	}\ > $@
+	} > $@
 ifneq ($(strip ${WAN_IP}),)
 	{\
-		echo 'Address=${WAN_IP}'\
-		echo 'Gateway=${WAN_GW}'\
-		echo 'DNS=${WAN_DNS}'\
-	}\ >> $@
+		echo 'Address=${WAN_IP}';\
+		echo 'Gateway=${WAN_GW}';\
+		echo 'DNS=${WAN_DNS}';\
+	} >> $@
 else
 	echo 'DHCP=ipv4' >> $@
+endif
 endif
 endif
 
@@ -159,7 +163,7 @@ ifndef CLEAN
 	{\
 		echo '# Raspberry Pi NAT Gateway';\
 		echo '[Match]';\
-	}\ > $@
+	} > $@
 ifeq ($(strip ${WAN_SSID}),)
 	echo 'Name=eth[1-9]' >> $@
 else
@@ -167,9 +171,17 @@ else
 endif
 	{\
 		echo;\
-		echo '[Network]'\
-		echo 'Bridge=br0'\
-	}\ >> $@
+		echo '[Network]';\
+		echo 'Bridge=br0';\
+	} >> $@
+endif
+
+ifneq ($(strip ${DHCP_RANGE}),)
+# convert DHCP_RANGE=firstIP,lastIP to pool offset and size
+COMMA=,
+r=$(subst $(COMMA), ,${DHCP_RANGE})
+offset=$(lastword $(subst ., ,$(firstword $r)))
+size=$(shell echo $$(($(lastword $(subst ., ,$(lastword $r)))-${offset}+1)))
 endif
 
 # tell networkd about lan bridge
@@ -186,17 +198,12 @@ ifndef CLEAN
 		echo 'ConfigureWithoutCarrier=true';\
 	} > $@
 ifneq ($(strip ${DHCP_RANGE}),)
-# convert DHCP_RANGE=firstIP,lastIP to pool offset and size
-COMMA=,
-r=$(subst $(COMMA), ,${DHCP_RANGE})
-offset=$(lastword $(subst ., ,$(firstword $r)))
-size=$(shell echo $$(($(lastword $(subst ., ,$(lastword $r)))-${offset}+1)))
 	{\
-		echo 'DHCPServer=yes'\
+		echo 'DHCPServer=yes';\
 		echo;\
-		echo '[DHCPServer]'\
-		echo 'PoolOffset=${offset}'\
-		echo 'PoolSize=${size}'\
+		echo '[DHCPServer]';\
+		echo 'PoolOffset=${offset}';\
+		echo 'PoolSize=${size}';\
 	} >> $@
 endif
 endif
@@ -215,6 +222,7 @@ ifndef CLEAN
 		echo 'DAEMON_CONF=/etc/hostapd/rasping.conf';\
 		echo '# rasping end';\
 	} >> $@
+endif
 endif
 
 # create hostapd config (if LAN_SSID is defined)
