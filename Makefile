@@ -19,10 +19,10 @@ FILES=/etc/iptables/rules.v4 /etc/iptables/rules.v6
 FILES+=/etc/systemd/network/rasping-wan.network /etc/systemd/network/rasping-lan.network /etc/systemd/network/rasping-br0.network
 FILES+=/etc/default/hostapd /etc/hostapd/rasping.conf
 
-# legacy, just cleanse
+# legacy, cleanse but do not delete
 FILES+=/etc/dhcpcd.conf
 
-# legacu, delete
+# legacy, files to delete
 PURGEFILES=/etc/dnsmasq.d/rasping.conf /etc/systemd/network/rasping-eth1.network /etc/systemd/network/rasping/eth2.network
 
 # apt install and remove functions (must be 'call'ed)
@@ -30,7 +30,7 @@ INSTALL=DEBIAN_FRONTEND=noninteractive apt install -y $1
 REMOVE=DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y $1
 
 # systemctl enable and disable functions (must be 'call'ed)
-ENABLE=systemctl enable --now $1
+ENABLE=systemctl unmask $1 && systemctl enable $1 && systemctl restart $1
 DISABLE=systemctl --quiet is-enabled $1 && systemctl disable --now $1 || true
 
 ifneq (${USER},root)
@@ -59,7 +59,6 @@ else
 endif
 	$(call ENABLE,systemd-networkd)
 ifneq ($(strip ${LAN_SSID}),)
-	systemctl unmask hostapd
 	$(call ENABLE,hostapd)
 endif
 	@echo "INSTALL COMPLETE!"
@@ -128,26 +127,27 @@ endif
 
 # cleanse legacy dhcpcd config
 /etc/dhcpcd.conf:
-	sed -i '/rasping start/,/rasping end/d' $@
+	sed -i '/rasping start/,/rasping end/d' $@ || true
 
 # tell networkd about wan device
 /etc/systemd/network/rasping-wan.network:
 	rm -f $@
 ifeq ($(strip ${WAN_SSID}),)
 ifndef CLEAN
-	{\
-		echo '# Raspberry Pi NAT Gateway';\
-		echo '[Match]';\
-		echo 'Name=eth0';\
-		echo;\
-		echo '[Network]';\
-	} > $@
+	mkdir -p $(dir $@)
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo '[Match]' >> $@
+ifneq ($(strip ${WAN_SSID}),)
+	name 'Name=wlan0' >> $@
+else
+	echo 'Name=eth0' >> $@
+endif
+	echo >> $@
+	echo '[Network]' >> $@
 ifneq ($(strip ${WAN_IP}),)
-	{\
-		echo 'Address=${WAN_IP}';\
-		echo 'Gateway=${WAN_GW}';\
-		echo 'DNS=${WAN_DNS}';\
-	} >> $@
+	echo 'Address=${WAN_IP}' >> $@
+	echo 'Gateway=${WAN_GW}' >> $@
+	echo 'DNS=${WAN_DNS}' >> $@
 else
 	echo 'DHCP=ipv4' >> $@
 endif
@@ -158,20 +158,17 @@ endif
 /etc/systemd/network/rasping-lan.network:
 	rm -f $@
 ifndef CLEAN
-	{\
-		echo '# Raspberry Pi NAT Gateway';\
-		echo '[Match]';\
-	} > $@
+	mkdir -p $(dir $@)
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo '[Match]' >> $@
 ifeq ($(strip ${WAN_SSID}),)
 	echo 'Name=eth[1-9]' >> $@
 else
 	echo 'Name=eth*' >> $@
 endif
-	{\
-		echo;\
-		echo '[Network]';\
-		echo 'Bridge=br0';\
-	} >> $@
+	echo >> $@
+	echo '[Network]' >> $@
+	echo 'Bridge=br0' >> $@
 endif
 
 ifneq ($(strip ${DHCP_RANGE}),)
@@ -182,44 +179,37 @@ offset=$(lastword $(subst ., ,$(firstword $r)))
 size=$(shell echo $$(($(lastword $(subst ., ,$(lastword $r)))-${offset}+1)))
 endif
 
-# tell networkd about lan bridge
+# tell networkd about the lan bridge
 /etc/systemd/network/rasping-br0.network:
 	rm -f $@
 ifndef CLEAN
-	{\
-		echo '# Raspberry Pi NAT Gateway';\
-		echo '[Match]';\
-		echo 'Name=br0';\
-		echo;\
-		echo '[Network]';\
-		echo 'Address=${LAN_IP}/24';\
-		echo 'ConfigureWithoutCarrier=true';\
-	} > $@
+	mkdir -p $(dir $@)
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo '[Match]' >> $@
+	echo 'Name=br0' >> $@
+	echo >> $@
+	echo '[Network]' >> $@
+	echo 'Address=${LAN_IP}/24' >> $@
+	echo 'ConfigureWithoutCarrier=true' >> $@
 ifneq ($(strip ${DHCP_RANGE}),)
-	{\
-		echo 'DHCPServer=yes';\
-		echo;\
-		echo '[DHCPServer]';\
-		echo 'PoolOffset=${offset}';\
-		echo 'PoolSize=${size}';\
-	} >> $@
+	echo 'DHCPServer=yes' >> $@
+	echo >> $@
+	echo '[DHCPServer]' >> $@
+	echo 'PoolOffset=${offset}' >> $@
+	echo 'PoolSize=${size}' >> $@
 endif
 endif
 
-/etc/systemd/network/rasping-br0.network:
-# enable hostapd (if LAN_SSID defined)
+# enable hostapd if LAN_SSID defined
 /etc/default/hostapd:
-ifeq ($(strip ${LAN_SSID}),)
-	rm -f $@
-else
 	sed -i '/rasping start/,/rasping end/d' $@ # first delete the old
 ifndef CLEAN
-	{\
-		echo '# rasping start';\
-		echo '# Raspberry Pi NAT Gateway';\
-		echo 'DAEMON_CONF=/etc/hostapd/rasping.conf';\
-		echo '# rasping end';\
-	} >> $@
+ifeq ($(strip ${LAN_SSID}),)
+	mkdir -p $(dir $@)
+	echo '# rasping start' >> $@
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo 'DAEMON_CONF=/etc/hostapd/rasping.conf' >> $@
+	echo '# rasping end' >> $@
 endif
 endif
 
@@ -228,23 +218,21 @@ endif
 	rm -f $@
 ifndef CLEAN
 ifneq ($(strip ${LAN_SSID}),)
-	{\
-		echo '# Raspberry Pi NAT Gateway';\
-		echo 'interface=wlan0';\
-		echo 'bridge=br0';\
-		echo 'ssid=$(strip ${LAN_SSID})';\
-		echo 'hw_mode=g';\
-		echo 'channel=$(strip ${LAN_CHANNEL})';\
-		echo 'wmm_enabled=0';\
-		echo 'macaddr_acl=0';\
-		echo 'auth_algs=1';\
-		echo 'ignore_broadcast_ssid=0';\
-		echo 'wpa=2';\
-		echo 'wpa_passphrase=$(strip ${LAN_PASSPHRASE})';\
-		echo 'wpa_key_mgmt=WPA-PSK';\
-		echo 'wpa_pairwise=TKIP';\
-		echo 'rsn_pairwise=CCMP';\
-	} > $@
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo 'interface=wlan0' >> $@
+	echo 'bridge=br0' >> $@
+	echo 'ssid=$(strip ${LAN_SSID})' >> $@
+	echo 'hw_mode=g' >> $@
+	echo 'channel=$(strip ${LAN_CHANNEL})' >> $@
+	echo 'wmm_enabled=0' >> $@
+	echo 'macaddr_acl=0' >> $@
+	echo 'auth_algs=1' >> $@
+	echo 'ignore_broadcast_ssid=0' >> $@
+	echo 'wpa=2' >> $@
+	echo 'wpa_passphrase=$(strip ${LAN_PASSPHRASE})' >> $@
+	echo 'wpa_key_mgmt=WPA-PSK' >> $@
+	echo 'wpa_pairwise=TKIP' >> $@
+	echo 'rsn_pairwise=CCMP' >> $@
 endif
 endif
 
@@ -256,5 +244,4 @@ clean:
 uninstall:
 	${MAKE} CLEAN=2
 	@echo "UNINSTALL COMPLETE"
-
 endif
