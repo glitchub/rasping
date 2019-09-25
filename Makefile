@@ -18,8 +18,9 @@ OVERLAY=$(shell find overlay -type f,l -printf "%P ")
 FILES=/etc/iptables/rules.v4 /etc/iptables/rules.v6
 FILES+=/etc/systemd/network/rasping-wan.network /etc/systemd/network/rasping-lan.network /etc/systemd/network/rasping-br0.network
 FILES+=/etc/default/hostapd /etc/hostapd/rasping.conf
+FILES+=/etc/wpa_supplicant-wlan0.conf
 
-# legacy, cleanse but do not delete
+# legacy, files to cleanse but do not delete
 FILES+=/etc/dhcpcd.conf
 
 # legacy, files to delete
@@ -43,6 +44,16 @@ ifeq ($(strip ${LAN_IP}),)
 $(error Must specify LAN_IP)
 endif
 
+ifneq ($(strip ${LAN_SSID}),)
+ifneq ($(strip ${WAN_SSID}),)
+$(error Must not enable LAN_SSID and WAN_SSID at the same time)
+endif
+endif
+
+ifneq ($(strip ${SSH_CLIENT}),)
+UNBLOCK += ${UNBLOCK_IF_SSH}
+endif
+
 # recreate everything
 .PHONY: install PACKAGES ${OVERLAY} ${FILES}
 
@@ -52,10 +63,9 @@ install: PACKAGES ${OVERLAY} ${FILES}
 	rm -rf ${PURGEFILES}
 ifndef CLEAN
 	$(call DISABLE,dhcpcd)
+	$(call DISABLE,wpa-supplicant)
 ifneq ($(strip ${WAN_SSID}),)
-	$(call ENABLE,wpa_supplicant)
-else
-	$(call DISABLE,wpa_supplicant)
+	$(call ENABLE,wpa_supplicant@wlan0)
 endif
 	$(call ENABLE,systemd-networkd)
 ifneq ($(strip ${LAN_SSID}),)
@@ -63,7 +73,7 @@ ifneq ($(strip ${LAN_SSID}),)
 endif
 	@echo "INSTALL COMPLETE!"
 else
-	$(call DISABLE, wpa_supplicant)
+	$(call DISABLE,wpa_supplicant@wlan0)
 	$(call DISABLE,hostapd)
 	$(call DISABLE,systemd-networkd)
 	$(call ENABLE,dhcpcd)
@@ -100,9 +110,18 @@ endif
 	iptables -F -tnat
 ifndef CLEAN
 	iptables -P INPUT DROP
+ifeq ($(strip $(WAN_SSID)),)	
 	iptables -A INPUT ! -i eth0 -j ACCEPT
+else	
+	iptables -A INPUT ! -i wlan0 -j ACCEPT
+endif	
 	iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+ifeq ($(strip $(WAN_SSID)),)
 	iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+else	
+	iptables -t nat -A POSTROUTING -o wlan0 -j MASQUERADE
+endif	
+	
 ifneq ($(strip ${UNBLOCK}),)
 	for p in ${UNBLOCK}; do iptables -A INPUT -p tcp --dport $$p -j ACCEPT; done
 endif
@@ -132,16 +151,16 @@ endif
 # tell networkd about wan device
 /etc/systemd/network/rasping-wan.network:
 	rm -f $@
-ifeq ($(strip ${WAN_SSID}),)
 ifndef CLEAN
 	mkdir -p $(dir $@)
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
 ifneq ($(strip ${WAN_SSID}),)
-	name 'Name=wlan0' >> $@
+	echo 'Name=wlan0' >> $@
 else
 	echo 'Name=eth0' >> $@
 endif
+	echo 'ConfigureWithoutCarrier=true' >> $@
 	echo >> $@
 	echo '[Network]' >> $@
 ifneq ($(strip ${WAN_IP}),)
@@ -150,7 +169,6 @@ ifneq ($(strip ${WAN_IP}),)
 	echo 'DNS=${WAN_DNS}' >> $@
 else
 	echo 'DHCP=ipv4' >> $@
-endif
 endif
 endif
 
@@ -202,7 +220,7 @@ endif
 
 # enable hostapd if LAN_SSID defined
 /etc/default/hostapd:
-	sed -i '/rasping start/,/rasping end/d' $@ # first delete the old
+	sed -i '/rasping start/,/rasping end/d' $@ || true # first delete the old
 ifndef CLEAN
 ifeq ($(strip ${LAN_SSID}),)
 	mkdir -p $(dir $@)
@@ -233,6 +251,22 @@ ifneq ($(strip ${LAN_SSID}),)
 	echo 'wpa_key_mgmt=WPA-PSK' >> $@
 	echo 'wpa_pairwise=TKIP' >> $@
 	echo 'rsn_pairwise=CCMP' >> $@
+endif
+endif
+
+/etc/wpa_supplicant/wpa_supplicant-wlan0.conf:
+	rm -f $@
+ifndef CLEAN
+ifneq ($(strip ${WAN_SSID}),)
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo 'ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev' >> $@
+	echo 'update_config=1' >>> $@
+	echo 'country=US' >> $@
+	echo 'network={' >> $@
+	echo '   ssid="$(strip ${WAN_SSID})' >> $@
+	echo '   psk=$(strip ${WAN_PASSPHRASE})' >> $@
+	echo '   key_mgmt=WPA-PSK' >> $@
+	echo '}' >> $@
 endif
 endif
 
