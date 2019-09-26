@@ -1,25 +1,19 @@
 Rasping - Raspberry Pi NAT Gateway
 
-Configure a Raspberry PI 3 or equivalent as a ethernet NAT gateway.
+Configure a Raspberry Pi 3B/4 as a NAT gateway.
 
-Physical configuration:
+The Pi attaches to WAN via ethernet or wifi STA, and provides LAN connectivity
+via ethernet, wifi AP, or usb ethernet dongles. 
 
-    The Pi's ethernet interface connects to the WAN. By default it expects to
-    receive an address via DHCP, but can also be configiured to use static IP.
-
-    The PI provides a LAN gateway on usb ethernet dongle, if attached, and via
-    Wifi if enabled.  The gateway has a pre-defined static IP address. By
-    default, DHCP is served to the upper-half of the LAN IP range, the lower
-    half is not assigned and available for arbitrary static IP. The LAN also
-    provides DNS.
+Please see rasping.cfg for detailed configuration information.
 
 To install:
 
-    Download the SDcard image:
+    Download a current raspian lite image:
         
         wget https://downloads.raspberrypi.org/raspbian_lite/images/raspbian_lite-2019-06-24/2019-06-20-raspbian-buster-lite.zip
 
-    Unzip and extract file 2019-06-20-raspbin-buster-lite.img (about 1.8GB). 
+    Unzip and extract the img file, it will be about about 1.8GB. 
 
     Copy the img file to an 8GB SDcard using dd on linux or Win32DiskImager
     on Windows, etc.
@@ -54,6 +48,5 @@ To install:
 
         sudo reboot
 
-The system will boot into the network gateway mode automatically. If you didn't
-enable wifi in the Makefile then you'll need to attach a usb ethernet dongle
-and attach to that.         
+The monitor and keyboard can be disconnected. The Pi will boot into network
+gateway mode automatically.
