@@ -9,7 +9,7 @@
 PACKAGES=iptables-persistent $(if $(strip ${LAN_SSID}),hostapd)
 
 # packages to unconditionally remove
-PURGEPACKAGES=dnsmasq avahi-daemon
+PURGEPACKAGES=dnsmasq
 
 # files to copy from overlay to the root
 OVERLAY=$(shell find overlay -type f,l -printf "%P ")
@@ -97,6 +97,8 @@ install: PACKAGES ${OVERLAY} ${FILES}
 	$(call REMOVE,${PURGEPACKAGES})
 	rm -rf ${PURGEFILES}
 ifndef CLEAN
+	$(call DISABLE,avahi-daemon)
+	$(call DISABLE,avahi-daemon.socket)
 	$(call DISABLE,dhcpcd)
 	$(call DISABLE,wpa-supplicant)
 	$(call ENABLE,systemd-networkd)
@@ -111,6 +113,8 @@ else
 	$(call DISABLE,wpa_supplicant@wlan0)
 	$(call DISABLE,hostapd)
 	$(call DISABLE,systemd-networkd)
+	$(call DISABLE,systemd-networkd)
+	$(call DISABLE,systemd-networkd.socket)
 	$(call ENABLE,dhcpcd)
 endif
 
