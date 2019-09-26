@@ -9,7 +9,7 @@
 PACKAGES=iptables-persistent $(if $(strip ${LAN_SSID}),hostapd)
 
 # packages to unconditionally remove
-PURGEPACKAGES=dnsmasq
+PURGEPACKAGES=dnsmasq openresolv
 
 # files to copy from overlay to the root
 OVERLAY=$(shell find overlay -type f,l -printf "%P ")
@@ -18,7 +18,7 @@ OVERLAY=$(shell find overlay -type f,l -printf "%P ")
 FILES=/etc/iptables/rules.v4 /etc/iptables/rules.v6
 FILES+=/etc/systemd/network/rasping-wan.network /etc/systemd/network/rasping-lan.network /etc/systemd/network/rasping-br0.network
 FILES+=/etc/default/hostapd /etc/hostapd/rasping.conf
-FILES+=/etc/wpa_supplicant-wlan0.conf
+FILES+=/etc/wpa_supplicant/wpa_supplicant-wlan0.conf
 
 # legacy, files to cleanse but do not delete
 FILES+=/etc/dhcpcd.conf
@@ -41,7 +41,7 @@ else
 
 include rasping.cfg
 
-# sanitize and sanity
+# sanitize and sanity check
 LAN_IP:=$(strip ${LAN_IP})
 DHCP_RANGE:=$(strip ${DHCP_RANGE})
 UNBLOCK:=$(strip ${UNBLOCK})
@@ -54,40 +54,55 @@ WAN_PASSPHRASE:=$(strip ${WAN_PASSPHRASE})
 WAN_IP:=$(strip ${WAN_IP})
 WAN_GW:=$(strip ${WAN_GW})
 WAN_DNS:=$(strip ${WAN_DNS})
+COUNTRY:=$(strip ${COUNTRY})
 
 ifdef SSH_CLIENT
 UNBLOCK:=$(strip ${UNBLOCK} ${UNBLOCK_IF_SSH})
 endif
 
 ifndef LAN_IP
-$(error Must specify LAN_IP)
+$(error Must define LAN_IP)
+endif
+$(warning Using LAN_IP = ${LAN_IP})
+
+ifdef DHCP_RANGE
+$(warning Using DHCP_RANGE = "${DHCP_RANGE}")	
 endif
 
 ifdef LAN_SSID
 ifdef WAN_SSID
-$(error Must not specify LAN_SSID and WAN_SSID at the same time)
+$(error Must not define LAN_SSID and WAN_SSID at the same time)
 endif
 ifndef LAN_PASSPHRASE
-$(error Must specify LAN_PASSPHRASE with LAN_SSID)	
+$(error Must define LAN_PASSPHRASE with LAN_SSID)	
 endif
 ifndef LAN_CHANNEL
-$(error Must specify LAN_CHANNEL with LAN_SSID)
+$(error Must define LAN_CHANNEL with LAN_SSID)
 endif
+ifndef COUNTRY
+$(error Must define COUNTRY with LAN_SSID)
+endif
+$(warning Using LAN_SSID="${LAN_SSID}", LAN_PASSPHRASE="${LAN_PASSPHRASE}", LAN_CHANNEL="${LAN_CHANNEL}", COUNTRY="${COUNTRY}")
 endif
 
 ifdef WAN_SSID
 ifndef WAN_PASSPHRASE
-$(error Must specify WAN_PASPHRASE with WAN_SSID)
+$(error Must define WAN_PASSHRASE with WAN_SSID)
 endif
+ifndef COUNTRY
+$(error Must define COUNTRY with WAN_SSID)
+endif
+$(warning Using WAN_SSID="${WAN_SSID}", WAN_PASSPHRASE="${WAN_PASSPHRASE}", COUNTRY="${COUNTRY}")
 endif
 
 ifdef WAN_IP
 ifndef WAN_GW
-$(error Must specify WAN_GW with WAN_IP)
+$(error Must define WAN_GW with WAN_IP)
 endif  
 ifndef WAN_DNS
-$(error Must specify WAN_DNS with WAN_IP)
-endif  
+$(error Must define WAN_DNS with WAN_IP)
+endif
+$(warning Using WAN_IP="${WAN_IP}", WAN_GW="${WAN_GW}", WAN_DNS="${WAN_DNS}")
 endif
 
 # recreate everything
@@ -102,6 +117,7 @@ ifndef CLEAN
 	$(call DISABLE,dhcpcd)
 	$(call DISABLE,wpa-supplicant)
 	$(call ENABLE,systemd-networkd)
+	ln -sf /run/systemd/resolv/stub-resolv.conf
 ifdef WAN_SSID
 	$(call ENABLE,wpa_supplicant@wlan0)
 endif
@@ -112,7 +128,6 @@ endif
 else
 	$(call DISABLE,wpa_supplicant@wlan0)
 	$(call DISABLE,hostapd)
-	$(call DISABLE,systemd-networkd)
 	$(call DISABLE,systemd-networkd)
 	$(call DISABLE,systemd-networkd.socket)
 	$(call ENABLE,dhcpcd)
@@ -198,8 +213,8 @@ ifdef WAN_SSID
 else
 	echo 'Name=eth0' >> $@
 endif
-	echo 'ConfigureWithoutCarrier=true' >> $@
 	echo '[Network]' >> $@
+	echo 'LinkLocalAddressing=no' >> $@
 ifdef WAN_IP
 	echo 'Address=${WAN_IP}' >> $@
 	echo 'Gateway=${WAN_GW}' >> $@
@@ -222,6 +237,7 @@ else
 	echo 'Name=eth[1-9]' >> $@
 endif
 	echo '[Network]' >> $@
+	echo 'LinkLocalAddressing=no' >> $@
 	echo 'Bridge=br0' >> $@
 endif
 
@@ -244,11 +260,14 @@ ifndef CLEAN
 	echo '[Network]' >> $@
 	echo 'Address=${LAN_IP}/24' >> $@
 	echo 'ConfigureWithoutCarrier=true' >> $@
+	echo 'LinkLocalAddressing=no' >> $@
 ifdef DHCP_RANGE
 	echo 'DHCPServer=yes' >> $@
 	echo '[DHCPServer]' >> $@
 	echo 'PoolOffset=${offset}' >> $@
 	echo 'PoolSize=${size}' >> $@
+	echo 'MaxLeaseTimeSec=3600' >> $@
+	echo 'EmitTimezone=no' >> $@
 endif
 endif
 
@@ -275,11 +294,14 @@ ifdef LAN_SSID
 	echo 'bridge=br0' >> $@
 	echo 'ssid=${LAN_SSID}' >> $@
 	echo 'hw_mode=g' >> $@
+	echo 'ieee80211d=1' >> $@
+	echo 'country_code=${COUNTRY}' >> $@
 	echo 'channel=${LAN_CHANNEL}' >> $@
 	echo 'wmm_enabled=0' >> $@
 	echo 'macaddr_acl=0' >> $@
 	echo 'auth_algs=1' >> $@
 	echo 'ignore_broadcast_ssid=0' >> $@
+        echo 'auth_algs=1' >> $@
 	echo 'wpa=2' >> $@
 	echo 'wpa_passphrase=${LAN_PASSPHRASE}' >> $@
 	echo 'wpa_key_mgmt=WPA-PSK' >> $@
@@ -294,12 +316,13 @@ ifndef CLEAN
 ifdef WAN_SSID
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev' >> $@
-	echo 'update_config=1' >>> $@
-	echo 'country=US' >> $@
+	echo 'update_config=1' >> $@
+	echo 'country=${COUNTRY}' >> $@
 	echo 'network={' >> $@
+	echo '   scan_ssid=1' >> $@
+	echo '   key_mgmt=WPA-PSK' >> $@
 	echo '   ssid="${WAN_SSID}"' >> $@
 	echo '   psk="${WAN_PASSPHRASE}"' >> $@
-	echo '   key_mgmt=WPA-PSK' >> $@
 	echo '}' >> $@
 endif
 endif
