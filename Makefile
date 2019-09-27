@@ -167,7 +167,7 @@ ifdef WAN_SSID
 else
 	iptables -A INPUT ! -i eth0 -j ACCEPT
 endif
-        iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+	iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
 ifdef WAN_SSID
 	iptables -t nat -A POSTROUTING -o wlan0 -j MASQUERADE
 else
@@ -319,10 +319,10 @@ ifdef WAN_SSID
 	echo 'update_config=1' >> $@
 	echo 'country=${COUNTRY}' >> $@
 	echo 'network={' >> $@
-	echo '   scan_ssid=1' >> $@
-	echo '   key_mgmt=WPA-PSK' >> $@
-	echo '   ssid="${WAN_SSID}"' >> $@
-	echo '   psk="${WAN_PASSPHRASE}"' >> $@
+	echo '	scan_ssid=1' >> $@
+	echo '	key_mgmt=WPA-PSK' >> $@
+	echo '	ssid="${WAN_SSID}"' >> $@
+	echo '	psk="${WAN_PASSPHRASE}"' >> $@
 	echo '}' >> $@
 endif
 endif
