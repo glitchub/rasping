@@ -75,8 +75,7 @@ To install:
 
         sudo reboot
 
-    Log back into the Pi again, as described above (but with the new
-    password). Then enter the following:
+    WAit for the Pi to boot then log in with the new password. Enter the following:
 
         sudo apt -y install git
 
@@ -86,19 +85,23 @@ To install:
     file "rasping.cfg" defines all configurable parameters, and provides a
     detailed description of each.
 
-        nano rasping/rasping.cfg         -- edit the configuration as desired
+        cd rasping
 
-        make -C rasping                  -- wait for "INSTALL COMPLETE"
+        nano rasping.cfg                -- edit the configuration as desired
 
-        sudo reboot
+        make
 
-The Pi will boot into NAT gateway mode automatically.
+    The make process will install several packages, rewrite system files, etc.
+    When it's done you'll see INSTALL COMPLETE.
 
-Depending on configuration you may need to unplug the ethernet from the network
-and attach USB ethernet dongles.
+    Reboot the Pi and it will come up in NAT gateway mode automatically.
 
-The monitor and keyboard can be detached.
+    Depending on configuration you'll need to unplug the ethernet from the
+    network and attach USB ethernet dongles.
 
-You'll be able to ssh to the LAN_IP from any LAN port, and also from WAN if you
-unblocked it.
+    You'll be able to ssh from any LAN port (to the LAN_IP address), and also
+    from WAN if you UNBLOCKed port 22.
+
+    Note you can restore the original network configuration 'make uninstall',
+    followed by a reboot.
 

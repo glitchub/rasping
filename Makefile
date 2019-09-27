@@ -26,7 +26,7 @@ INSTALL=DEBIAN_FRONTEND=noninteractive apt install -y $1
 REMOVE=DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y $1
 
 # systemctl enable and disable functions (must be 'call'ed)
-ENABLE=systemctl unmask $1 && systemctl enable $1 && systemctl restart $1
+ENABLE=systemctl unmask $1 && systemctl enable $1
 DISABLE=systemctl --quiet is-enabled $1 && systemctl disable --now $1 && systemctl mask $1 || true
 
 ifneq (${USER},root)
@@ -58,6 +58,10 @@ $(warning Using LAN_IP = ${LAN_IP})
 
 ifdef DHCP_RANGE
 $(warning Using DHCP_RANGE = "${DHCP_RANGE}")
+endif
+
+ifndef UNBLOCK
+$(warning Using UNBLOCK = "${UNBLOCK}")
 endif
 
 ifdef LAN_SSID
@@ -101,12 +105,12 @@ endif
 
 install: PACKAGES ${OVERLAY} ${FILES}
 ifndef CLEAN
+	$(call DISABLE,dhcpcd)
 	$(call DISABLE,avahi-daemon)
 	$(call DISABLE,avahi-daemon.socket)
-        $(call DISABLE,dnsmasq)
 	$(call DISABLE,networking)
-	$(call DISABLE,dhcpcd)
 	$(call DISABLE,wpa-supplicant)
+	$(call DISABLE,dnsmasq)
 	$(call ENABLE,systemd-networkd)
 	$(call ENABLE,systemd-resolved)
 	ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
@@ -298,7 +302,7 @@ ifdef LAN_SSID
 	echo 'macaddr_acl=0' >> $@
 	echo 'auth_algs=1' >> $@
 	echo 'ignore_broadcast_ssid=0' >> $@
-        echo 'auth_algs=1' >> $@
+	echo 'auth_algs=1' >> $@
 	echo 'wpa=2' >> $@
 	echo 'wpa_passphrase=${LAN_PASSPHRASE}' >> $@
 	echo 'wpa_key_mgmt=WPA-PSK' >> $@
