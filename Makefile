@@ -176,12 +176,12 @@ else
 endif
 
 ifdef UNBLOCK
-	for p in ${UNBLOCK}; do iptables -A INPUT -p tcp --dport $$p -j ACCEPT; done
+	for p in ${UNBLOCK}; do iptables -A INPUT -p tcp -d ${WAN_IP} --dport $$p -j ACCEPT; done
 endif
 ifdef FORWARD
 	for p in ${FORWARD}; do \
-		 iptables -t nat -A PREROUTING -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
-		 iptables -t nat -A OUTPUT -o lo -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
+		 iptables -t nat -A PREROUTING -p tcp -d ${WAN_IP} --dport $${p%=*} -j DNAT --to $${p#*=}; \
+		 iptables -t nat -A OUTPUT -o lo -p tcp -d ${WAN_IP} --dport $${p%=*} -j DNAT --to $${p#*=}; \
 	done
 endif
 	iptables-save -f $@

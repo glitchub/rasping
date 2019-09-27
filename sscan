@@ -1,0 +1,104 @@
+#!/usr/bin/python
+
+import sys, struct, socket, threading, time, subprocess, platform, traceback
+
+lock=threading.Lock()
+found=0
+
+def scan(ip):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(.2)
+    if not sock.connect_ex((socket.gethostbyname(ip), 22)):
+        try: s=sock.recv(80)
+        except: s="unknown"
+        global lock, found
+        lock.acquire()
+        found += 1
+        print "  " + ip + "\t: "+s.splitlines()[0]
+        lock.release()
+    sock.close()
+
+# iterate all addresses in specified netlist eg "192.168.0.0/24" -> 192.168.0.0, 192.168.0.1, etc
+def netlist(network):
+    if not '/' in network: yield network
+    else:
+        network,netmask=network.split('/',1)
+        if netmask == "32": yield network
+        else:
+            shift=32-int(netmask)
+            base=struct.unpack(">I",struct.pack("BBBB",*map(int,network.split('.'))))[0] & (0xffffffff<<shift)
+            # skip first and last IP in range
+            for i in xrange(1,(1<<shift)-1):
+                yield "%d.%d.%d.%d" % struct.unpack('BBBB',struct.pack(">I",base+i))
+
+# Return a list of local IPv4 networks
+def localnets():
+    allow=["10.","192.168."]+["172.%d."%n for n in range(16,32)]
+    def allowed(l): return filter(lambda s:s.startswith(tuple(allow)),l)
+    try:
+        if platform.system().lower().startswith(("windows","cygwin")):
+            # try powershell
+            s=subprocess.check_output(['powershell','-c','get-netroute -addressfamily ipv4 | %{$_.destinationprefix} | select -unique | select-string -notmatch -pattern "/32|/0" | %{$_.tostring()}'])
+            # print s
+            n=allowed(s.splitlines())
+            if len(n): return n
+        else:
+            # try 'ip route'
+            s=subprocess.check_output("ip -4 route show scope link".split())
+            # print s
+            n=allowed(map(lambda l:l.split()[0], s.splitlines()))
+            if len(n): return n
+    except:
+       pass
+
+    # try getaddrinfo on localhost
+    s=socket.getaddrinfo(socket.gethostname(),0,2)
+    n=allowed(map(lambda l:"%s/24" % l[4][0], s)) # assume all are /24
+    if len(n): return n
+
+    # make a dummy udp connection and see what the source address is
+    sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    sock.connect(("8.8.8.8",1))
+    print sock.getpeername(), sock.getsockname()
+    n=allowed([sock.getsockname()[0]+"/24"]) # assume /24
+    sock.close()
+    if len(n): return n;
+
+    raise Exception("Can't find local IPv4 networks, please specify the command line")
+
+if len(sys.argv) > 1:
+    networks=sys.argv[1:]
+else:
+    networks=localnets()
+
+try:
+    print >> sys.stderr, "Scanning", ", ".join(networks), "for open ssh ports..."
+    total=sum(map(lambda s : 1<<(32-int((s+"/32").split("/")[1])), networks))
+    minutes=int(total/(256*60))
+    if minutes: print >> sys.stderr, "Warning, scanning %d hosts may take over %d %s!" % (total, minutes, "minutes" if minutes > 1 else "minute")
+
+    threads={}
+    for n in networks:
+        for ip in netlist(n):
+            t=threading.Thread(target=scan, args=(ip,))
+            t.start()
+            threads[ip]=t
+            while len(threads) == 64:
+                # don't overflow the arp cache!
+                for k in threads.keys():
+                    if not threads[k].is_alive():
+                        del threads[k]
+
+    while len(threads):
+        for k in threads.keys():
+            if not threads[k].is_alive(): del threads[k]
+
+    print (found or "No"), ("host" if found == 1 else "hosts"), "found"
+
+except KeyboardInterrupt:
+    print
+    quit(1)
+
+except Exception:
+    traceback.print_exc()
+    quit(1)
