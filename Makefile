@@ -16,7 +16,7 @@ FILES=/etc/iptables/rules.v4 /etc/iptables/rules.v6
 FILES+=/etc/systemd/network/rasping-wan.network /etc/systemd/network/rasping-lan.network /etc/systemd/network/rasping-br0.network
 FILES+=/etc/default/hostapd /etc/hostapd/rasping.conf
 FILES+=/etc/wpa_supplicant/wpa_supplicant-wlan0.conf
-FILES+=/etc/resolvconf.conf
+FILES+=/etc/resolvconf.conf /etc/systemd/resolved.conf
 
 # legacy, files to cleanse but do not delete
 FILES+=/etc/dhcpcd.conf
@@ -127,6 +127,7 @@ else
 	$(call DISABLE,systemd-networkd)
 	$(call DISABLE,systemd-networkd.socket)
 	$(call DISABLE,systemd-resolved)
+	rm /etc/resolv.conf
 	$(call ENABLE,dhcpcd)
 	$(call ENABLE,networking)
 endif
@@ -212,7 +213,6 @@ else
 	echo 'Name=eth0' >> $@
 endif
 	echo '[Network]' >> $@
-	echo 'DNSSEC=no' >> $@
 	echo 'LinkLocalAddressing=no' >> $@
 ifdef WAN_IP
 	echo 'Address=${WAN_IP}' >> $@
@@ -220,6 +220,9 @@ ifdef WAN_IP
 	echo 'DNS=${WAN_DNS}' >> $@
 else
 	echo 'DHCP=ipv4' >> $@
+	# echo '[DHCPv4]' >> $@
+	# echo 'ClientIdentifier=mac' >> $@
+	# echo 'UseTimezone=yes' >> $@
 endif
 endif
 
@@ -236,7 +239,6 @@ else
 	echo 'Name=eth[1-9]' >> $@
 endif
 	echo '[Network]' >> $@
-	echo 'DNSSEC=no' >> $@
 	echo 'LinkLocalAddressing=no' >> $@
 	echo 'Bridge=br0' >> $@
 endif
@@ -259,7 +261,6 @@ ifndef CLEAN
 	echo 'Name=br0' >> $@
 	echo '[Network]' >> $@
 	echo 'Address=${LAN_IP}/24' >> $@
-	echo 'DNSSEC=no' >> $@
 	echo 'ConfigureWithoutCarrier=true' >> $@
 	echo 'LinkLocalAddressing=no' >> $@
 ifdef DHCP_RANGE
@@ -268,7 +269,6 @@ ifdef DHCP_RANGE
 	echo 'PoolOffset=${offset}' >> $@
 	echo 'PoolSize=${size}' >> $@
 	echo 'MaxLeaseTimeSec=3600' >> $@
-	echo 'EmitTimezone=no' >> $@
 endif
 endif
 
@@ -334,6 +334,15 @@ ifndef CLEAN
 	echo '# rasping start' >> $@
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'resolvconf=NO' >> $@
+	echo '# rasping end' >> $@
+endif
+
+/etc/systemd/resolved.conf:
+	sed -i '/rasping start/,/rasping end/d' $@ || true # first delete the old
+ifndef CLEAN
+	echo '# rasping start' >> $@
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo 'DNSSEC=no' >> $@
 	echo '# rasping end' >> $@
 endif
 
