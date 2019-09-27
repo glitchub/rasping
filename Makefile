@@ -8,9 +8,6 @@
 # package to install
 PACKAGES=iptables-persistent $(if $(strip ${LAN_SSID}),hostapd)
 
-# packages to unconditionally remove
-PURGEPACKAGES=dnsmasq openresolv
-
 # files to copy from overlay to the root
 OVERLAY=$(shell find overlay -type f,l -printf "%P ")
 
@@ -19,12 +16,10 @@ FILES=/etc/iptables/rules.v4 /etc/iptables/rules.v6
 FILES+=/etc/systemd/network/rasping-wan.network /etc/systemd/network/rasping-lan.network /etc/systemd/network/rasping-br0.network
 FILES+=/etc/default/hostapd /etc/hostapd/rasping.conf
 FILES+=/etc/wpa_supplicant/wpa_supplicant-wlan0.conf
+FILES+=/etc/resolvconf.conf
 
 # legacy, files to cleanse but do not delete
 FILES+=/etc/dhcpcd.conf
-
-# legacy, files to delete
-PURGEFILES=/etc/dnsmasq.d/rasping.conf /etc/systemd/network/rasping-eth1.network /etc/systemd/network/rasping/eth2.network
 
 # apt install and remove functions (must be 'call'ed)
 INSTALL=DEBIAN_FRONTEND=noninteractive apt install -y $1
@@ -32,7 +27,7 @@ REMOVE=DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y $1
 
 # systemctl enable and disable functions (must be 'call'ed)
 ENABLE=systemctl unmask $1 && systemctl enable $1 && systemctl restart $1
-DISABLE=systemctl --quiet is-enabled $1 && systemctl disable --now $1 || true
+DISABLE=systemctl --quiet is-enabled $1 && systemctl disable --now $1 && systemctl mask $1 || true
 
 ifneq (${USER},root)
 # become root if not already
@@ -109,15 +104,16 @@ endif
 .PHONY: install PACKAGES ${OVERLAY} ${FILES}
 
 install: PACKAGES ${OVERLAY} ${FILES}
-	$(call REMOVE,${PURGEPACKAGES})
-	rm -rf ${PURGEFILES}
 ifndef CLEAN
 	$(call DISABLE,avahi-daemon)
 	$(call DISABLE,avahi-daemon.socket)
+        $(call DISABLE,dnsmasq)
+	$(call DISABLE,networking)
 	$(call DISABLE,dhcpcd)
 	$(call DISABLE,wpa-supplicant)
 	$(call ENABLE,systemd-networkd)
-	ln -sf /run/systemd/resolv/stub-resolv.conf
+	$(call ENABLE,systemd-resolved)
+	ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 ifdef WAN_SSID
 	$(call ENABLE,wpa_supplicant@wlan0)
 endif
@@ -130,7 +126,9 @@ else
 	$(call DISABLE,hostapd)
 	$(call DISABLE,systemd-networkd)
 	$(call DISABLE,systemd-networkd.socket)
+	$(call DISABLE,systemd-resolved)
 	$(call ENABLE,dhcpcd)
+	$(call ENABLE,networking)
 endif
 
 ifndef CLEAN
@@ -214,6 +212,7 @@ else
 	echo 'Name=eth0' >> $@
 endif
 	echo '[Network]' >> $@
+	echo 'DNSSEC=no' >> $@
 	echo 'LinkLocalAddressing=no' >> $@
 ifdef WAN_IP
 	echo 'Address=${WAN_IP}' >> $@
@@ -237,6 +236,7 @@ else
 	echo 'Name=eth[1-9]' >> $@
 endif
 	echo '[Network]' >> $@
+	echo 'DNSSEC=no' >> $@
 	echo 'LinkLocalAddressing=no' >> $@
 	echo 'Bridge=br0' >> $@
 endif
@@ -259,6 +259,7 @@ ifndef CLEAN
 	echo 'Name=br0' >> $@
 	echo '[Network]' >> $@
 	echo 'Address=${LAN_IP}/24' >> $@
+	echo 'DNSSEC=no' >> $@
 	echo 'ConfigureWithoutCarrier=true' >> $@
 	echo 'LinkLocalAddressing=no' >> $@
 ifdef DHCP_RANGE
@@ -325,6 +326,15 @@ ifdef WAN_SSID
 	echo '   psk="${WAN_PASSPHRASE}"' >> $@
 	echo '}' >> $@
 endif
+endif
+
+/etc/resolvconf.conf:
+	sed -i '/rasping start/,/rasping end/d' $@ || true # first delete the old
+ifndef CLEAN
+	echo '# rasping start' >> $@
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo 'resolvconf=NO' >> $@
+	echo '# rasping end' >> $@
 endif
 
 .PHONY: clean uninstall
