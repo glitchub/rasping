@@ -51,17 +51,13 @@ WAN_GW:=$(strip ${WAN_GW})
 WAN_DNS:=$(strip ${WAN_DNS})
 COUNTRY:=$(strip ${COUNTRY})
 
-ifdef SSH_CLIENT
-UNBLOCK:=$(strip ${UNBLOCK} ${UNBLOCK_IF_SSH})
-endif
-
 ifndef LAN_IP
 $(error Must define LAN_IP)
 endif
 $(warning Using LAN_IP = ${LAN_IP})
 
 ifdef DHCP_RANGE
-$(warning Using DHCP_RANGE = "${DHCP_RANGE}")	
+$(warning Using DHCP_RANGE = "${DHCP_RANGE}")
 endif
 
 ifdef LAN_SSID
@@ -69,7 +65,7 @@ ifdef WAN_SSID
 $(error Must not define LAN_SSID and WAN_SSID at the same time)
 endif
 ifndef LAN_PASSPHRASE
-$(error Must define LAN_PASSPHRASE with LAN_SSID)	
+$(error Must define LAN_PASSPHRASE with LAN_SSID)
 endif
 ifndef LAN_CHANNEL
 $(error Must define LAN_CHANNEL with LAN_SSID)
@@ -93,7 +89,7 @@ endif
 ifdef WAN_IP
 ifndef WAN_GW
 $(error Must define WAN_GW with WAN_IP)
-endif  
+endif
 ifndef WAN_DNS
 $(error Must define WAN_DNS with WAN_IP)
 endif
@@ -163,24 +159,24 @@ endif
 	iptables -F -tnat
 ifndef CLEAN
 	iptables -P INPUT DROP
-ifdef WAN_SSID	
+ifdef WAN_SSID
 	iptables -A INPUT ! -i wlan0 -j ACCEPT
-else	
+else
 	iptables -A INPUT ! -i eth0 -j ACCEPT
-endif	
+endif
 	iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
 ifdef WAN_SSID
 	iptables -t nat -A POSTROUTING -o wlan0 -j MASQUERADE
-else	
+else
 	iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-endif	
-	
+endif
+
 ifdef UNBLOCK
 	for p in ${UNBLOCK}; do iptables -A INPUT -p tcp --dport $$p -j ACCEPT; done
 endif
 ifdef FORWARD
 	for p in ${FORWARD}; do \
-		 iptables -t nat -A PREROUTING -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \ 
+		 iptables -t nat -A PREROUTING -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
 		 iptables -t nat -A OUTPUT -o lo -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
 	done
 endif
