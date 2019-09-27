@@ -158,32 +158,31 @@ endif
 
 # configure NAT, block everything on the WAN except as defined by UNBLOCK or FORWARD
 /etc/iptables/rules.v4:
-	iptables -F
 	iptables -P INPUT ACCEPT
+	iptables -F
 	iptables -F -tnat
 ifndef CLEAN
-	iptables -P INPUT DROP
 ifdef WAN_SSID
 	iptables -A INPUT ! -i wlan0 -j ACCEPT
 else
 	iptables -A INPUT ! -i eth0 -j ACCEPT
 endif
-	iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+        iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
 ifdef WAN_SSID
 	iptables -t nat -A POSTROUTING -o wlan0 -j MASQUERADE
 else
 	iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 endif
-
 ifdef UNBLOCK
-	for p in ${UNBLOCK}; do iptables -A INPUT -p tcp -d ${WAN_IP} --dport $$p -j ACCEPT; done
+	for p in ${UNBLOCK}; do iptables -A INPUT -p tcp --dport $$p -j ACCEPT; done
 endif
 ifdef FORWARD
 	for p in ${FORWARD}; do \
-		 iptables -t nat -A PREROUTING -p tcp -d ${WAN_IP} --dport $${p%=*} -j DNAT --to $${p#*=}; \
-		 iptables -t nat -A OUTPUT -o lo -p tcp -d ${WAN_IP} --dport $${p%=*} -j DNAT --to $${p#*=}; \
+		 iptables -t nat -A PREROUTING -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
+		 iptables -t nat -A OUTPUT -o lo -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
 	done
 endif
+	iptables -P INPUT DROP
 	iptables-save -f $@
 endif
 
