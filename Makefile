@@ -29,6 +29,9 @@ REMOVE=DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y $1
 ENABLE=systemctl unmask $1 && systemctl enable $1
 DISABLE=systemctl --quiet is-enabled $1 && systemctl disable --now $1 && systemctl mask $1 || true
 
+# escape string for use in shell single quotes
+quote='$(subst ','\'',$1)'
+
 ifneq (${USER},root)
 # become root if not already
 default ${MAKECMDGOALS}:; sudo -E ${MAKE} ${MAKECMDGOALS}
@@ -41,11 +44,13 @@ LAN_IP:=$(strip ${LAN_IP})
 DHCP_RANGE:=$(strip ${DHCP_RANGE})
 UNBLOCK:=$(strip ${UNBLOCK})
 FORWARD:=$(strip ${FORWARD})
+ifndef RAWSTRINGS
 LAN_SSID:=$(strip ${LAN_SSID})
 LAN_PASSPHRASE:=$(strip ${LAN_PASSPHRASE})
-LAN_CHANNEL:=$(strip ${LAN_CHANNEL})
 WAN_SSID:=$(strip ${WAN_SSID})
 WAN_PASSPHRASE:=$(strip ${WAN_PASSPHRASE})
+endif
+LAN_CHANNEL:=$(strip ${LAN_CHANNEL})
 WAN_IP:=$(strip ${WAN_IP})
 WAN_GW:=$(strip ${WAN_GW})
 WAN_DNS:=$(strip ${WAN_DNS})
@@ -65,9 +70,6 @@ $(warning Using UNBLOCK = "${UNBLOCK}")
 endif
 
 ifdef LAN_SSID
-ifdef WAN_SSID
-$(error Must not define LAN_SSID and WAN_SSID at the same time)
-endif
 ifndef LAN_PASSPHRASE
 $(error Must define LAN_PASSPHRASE with LAN_SSID)
 endif
@@ -219,9 +221,6 @@ ifdef WAN_IP
 	echo 'DNS=${WAN_DNS}' >> $@
 else
 	echo 'DHCP=ipv4' >> $@
-	# echo '[DHCPv4]' >> $@
-	# echo 'ClientIdentifier=mac' >> $@
-	# echo 'UseTimezone=yes' >> $@
 endif
 endif
 
@@ -233,9 +232,9 @@ ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
 ifdef WAN_SSID
-	echo 'Name=eth*' >> $@
+	echo 'Name=eth* usb*' >> $@
 else
-	echo 'Name=eth[1-9]' >> $@
+	echo 'Name=eth[1-9] usb*' >> $@
 endif
 	echo '[Network]' >> $@
 	echo 'LinkLocalAddressing=no' >> $@
@@ -290,20 +289,30 @@ endif
 ifndef CLEAN
 ifdef LAN_SSID
 	echo '# Raspberry Pi NAT Gateway' >> $@
+ifdef WAN_SSID
+	echo 'interface=wlan1' >> $@
+else
 	echo 'interface=wlan0' >> $@
+endif
 	echo 'bridge=br0' >> $@
-	echo 'ssid=${LAN_SSID}' >> $@
-	echo 'hw_mode=g' >> $@
+	echo 'ssid=$(call quote,${LAN_SSID})' >> $@
 	echo 'ieee80211d=1' >> $@
 	echo 'country_code=${COUNTRY}' >> $@
 	echo 'channel=${LAN_CHANNEL}' >> $@
+ifneq ($(shell ((${LAN_CHANNEL} > 14)) && echo yes),)
+	echo 'hw_mode=a' >> $@
+	echo 'ieee80211n=1' >> $@
+	echo 'ieee80211ac=1' >> $@
+else
+	echo 'hw_mode=g' >> $@
+	echo 'ieee80211n=1' >> $@
+endif
 	echo 'wmm_enabled=0' >> $@
 	echo 'macaddr_acl=0' >> $@
-	echo 'auth_algs=1' >> $@
 	echo 'ignore_broadcast_ssid=0' >> $@
 	echo 'auth_algs=1' >> $@
 	echo 'wpa=2' >> $@
-	echo 'wpa_passphrase=${LAN_PASSPHRASE}' >> $@
+	echo 'wpa_passphrase=$(call quote,${LAN_PASSPHRASE})' >> $@
 	echo 'wpa_key_mgmt=WPA-PSK' >> $@
 	echo 'wpa_pairwise=TKIP' >> $@
 	echo 'rsn_pairwise=CCMP' >> $@
@@ -321,8 +330,8 @@ ifdef WAN_SSID
 	echo 'network={' >> $@
 	echo '	scan_ssid=1' >> $@
 	echo '	key_mgmt=WPA-PSK' >> $@
-	echo '	ssid="${WAN_SSID}"' >> $@
-	echo '	psk="${WAN_PASSPHRASE}"' >> $@
+	echo '	ssid="$(call quote,${WAN_SSID})"' >> $@
+	echo '	psk="$(call quote,${WAN_PASSPHRASE})"' >> $@
 	echo '}' >> $@
 endif
 endif
