@@ -403,7 +403,7 @@ endif
 
 .PHONY: clean uninstall
 
-clean:; ${MAKE} CLEAN=1
+clean:; exec ${MAKE} CLEAN=1
 
-uninstall:; ${MAKE} CLEAN=2
+uninstall:; exec ${MAKE} CLEAN=2
 endif
