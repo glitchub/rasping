@@ -348,7 +348,7 @@ endif
 ifndef CLEAN
 	echo '# rasping start' >> $@
 	echo '# Raspberry Pi NAT Gateway' >> $@
-        echo 'FallbackDNS=1.1.1.1 8.8.8.8' >> $@
+	echo 'FallbackDNS=1.1.1.1 8.8.8.8' >> $@
 	echo 'DNSSEC=no' >> $@
 	echo '# rasping end' >> $@
 endif
