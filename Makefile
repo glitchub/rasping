@@ -335,7 +335,7 @@ endif
 
 # tell networkd about the bridge
 /etc/systemd/network/rasping.netdev:
-	rf -f $@
+	rm -f $@
 ifndef CLEAN
 	mkdir -p $(dir $@)
 	echo '# Raspberry Pi NAT Gateway' >> $@
