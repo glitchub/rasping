@@ -1,8 +1,12 @@
 # Raspberry PI NAT Gateway
-
 ifeq ($(shell [ -f /etc/rpi-issue ] && [ $$(systemd --version | awk '{print $$2;exit}') -ge 241 ] && echo yes),)
 $(error Requires Raspberry Pi with systemd version 241 or later)
 endif
+
+ifneq (${USER},root)
+# become root if not already
+default ${MAKECMDGOALS}:; sudo -E ${MAKE} ${MAKECMDGOALS}
+else
 
 # package to install
 PACKAGES=iptables-persistent $(if $(strip ${LAN_SSID}),hostapd)
@@ -36,10 +40,6 @@ DISABLE=systemctl --quiet is-enabled $1 && systemctl disable --now $1 && systemc
 # escape string for use in shell single quotes
 quote=$(subst ','\'',$1)
 
-ifneq (${USER},root)
-# become root if not already
-default ${MAKECMDGOALS}:; sudo -E ${MAKE} ${MAKECMDGOALS}
-else
 
 include rasping.cfg
 
@@ -405,6 +405,6 @@ endif
 	sed -i '/rasping start/,/rasping end/d' $@ || true
 
 .PHONY: clean uninstall
-clean:; exec ${MAKE} CLEAN=1
-uninstall:; exec ${MAKE} CLEAN=2
+clean:; ${MAKE} CLEAN=1
+uninstall:; ${MAKE} CLEAN=2
 endif
