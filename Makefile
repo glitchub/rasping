@@ -37,9 +37,7 @@ REMOVE=DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y $1
 ENABLE=systemctl unmask $1 && systemctl enable $1
 DISABLE=systemctl --quiet is-enabled $1 && systemctl disable --now $1 && systemctl mask $1 || true
 
-# escape string for use in shell single quotes
-quote=$(subst ','\'',$1)
-
+# load configuration
 include rasping.cfg
 
 # sanitize and sanity check
@@ -189,7 +187,7 @@ else
 	echo 'interface=wlan0' >> $@
 endif
 	echo 'bridge=br0' >> $@
-	echo 'ssid=$(call quote,${LAN_SSID})' >> $@
+	echo 'ssid=$($(subst ','\'',${LAN_SSID})' >> $@
 	echo 'ieee80211d=1' >> $@
 	echo 'country_code=${COUNTRY}' >> $@
 	echo 'channel=${LAN_CHANNEL}' >> $@
@@ -206,10 +204,11 @@ endif
 	echo 'ignore_broadcast_ssid=0' >> $@
 	echo 'auth_algs=1' >> $@
 	echo 'wpa=2' >> $@
-	echo 'wpa_passphrase=$(call quote,${LAN_PASSPHRASE})' >> $@
+	echo 'wpa_passphrase=$($(subst ','\'',${LAN_PASSPHRASE})' >> $@
 	echo 'wpa_key_mgmt=WPA-PSK' >> $@
 	echo 'wpa_pairwise=TKIP' >> $@
 	echo 'rsn_pairwise=CCMP' >> $@
+        echo 'ctrl_interface=/var/run/hostapd' >> $@
 endif
 endif
 
@@ -391,8 +390,8 @@ ifdef WAN_SSID
 	echo 'network={' >> $@
 	echo '	scan_ssid=1' >> $@
 	echo '	key_mgmt=WPA-PSK' >> $@
-	echo '	ssid="$(call quote,${WAN_SSID})"' >> $@
-	echo '	psk="$(call quote,${WAN_PASSPHRASE})"' >> $@
+	echo '	ssid=$($(subst ','\'',${WAN_SSID})' >> $@
+	echo '	psk=$($(subst ','\'',${WAN_PASSPHRASE})' >> $@
 	echo '}' >> $@
 endif
 endif
