@@ -57,13 +57,13 @@ COUNTRY:=$(strip ${COUNTRY})
 ifndef LAN_IP
 $(error Must define LAN_IP)
 endif
-$(info Using LAN_IP = ${LAN_IP})
+$(info Using LAN_IP = "${LAN_IP}")
 
 ifdef DHCP_RANGE
 $(info Using DHCP_RANGE = "${DHCP_RANGE}")
 endif
 
-ifndef UNBLOCK
+ifdef UNBLOCK
 $(info Using UNBLOCK = "${UNBLOCK}")
 endif
 
