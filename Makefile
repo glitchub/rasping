@@ -1,24 +1,28 @@
 # Raspberry PI NAT Gateway
 
-# Make sure we're running the right code
-#feq ($(shell grep "Raspberry Pi reference 2019-06-20" /etc/rpi-issue),)
-#(error "Requires Raspberry Pi running 2019-06-20-raspbin-buster-lite.img")
-#ndif
+ifeq ($(shell [ -f /etc/rpi-issue ] && [ $$(systemd --version | awk '{print $$2;exit}') -ge 241 ] && echo yes),)
+$(error Requires Raspberry Pi with systemd version 241 or later)
+endif
 
 # package to install
 PACKAGES=iptables-persistent $(if $(strip ${LAN_SSID}),hostapd)
 
-# files to copy from overlay to the root
-OVERLAY=$(shell find overlay -type f,l -printf "%P ")
-
 # files to generate or alter
-FILES=/etc/iptables/rules.v4 /etc/iptables/rules.v6
-FILES+=/etc/systemd/network/rasping-wan.network /etc/systemd/network/rasping-lan.network /etc/systemd/network/rasping-br0.network
-FILES+=/etc/default/hostapd /etc/hostapd/rasping.conf
-FILES+=/etc/wpa_supplicant/wpa_supplicant-wlan0.conf
-FILES+=/etc/resolvconf.conf /etc/systemd/resolved.conf
+FILES =  /etc/default/hostapd
+FILES += /etc/hostapd/rasping.conf
+FILES += /etc/iptables/rules.v4
+FILES += /etc/iptables/rules.v6
+FILES += /etc/issue.d/rasping.issue
+FILES += /etc/resolvconf.conf
+FILES += /etc/sysctl.d/rasping.conf
+FILES += /etc/systemd/network/rasping-br0.network
+FILES += /etc/systemd/network/rasping-lan.network
+FILES += /etc/systemd/network/rasping.netdev
+FILES += /etc/systemd/network/rasping-wan.network
+FILES += /etc/systemd/resolved.conf
+FILES += /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
 
-# legacy, files to cleanse but do not delete
+# legacy, cleanse but do not create
 FILES+=/etc/dhcpcd.conf
 
 # apt install and remove functions (must be 'call'ed)
@@ -60,7 +64,15 @@ endif
 $(info Using LAN_IP = "${LAN_IP}")
 
 ifdef DHCP_RANGE
-$(info Using DHCP_RANGE = "${DHCP_RANGE}")
+# convert first,last to dhcp pool offset and size
+# Handleslegacy IP,IP or octet,octet
+COMMA=,
+r=$(subst $(COMMA), ,${DHCP_RANGE})
+dhcpoffset=$(lastword $(subst ., ,$(firstword $r)))
+dhcpsize=$(shell echo $$(($(lastword $(subst ., ,$(lastword $r)))-${dhcpoffset}+1)))
+$(info Using DHCP_RANGE = "${DHCP_RANGE}" (offset=${dhcpoffset}, size=${dhcpsize})
+endif
+
 endif
 
 ifdef UNBLOCK
@@ -101,9 +113,9 @@ $(info Using WAN_IP="${WAN_IP}", WAN_GW="${WAN_GW}", WAN_DNS="${WAN_DNS}")
 endif
 
 # recreate everything
-.PHONY: install PACKAGES ${OVERLAY} ${FILES}
+.PHONY: install PACKAGES ${FILES}
 
-install: PACKAGES ${OVERLAY} ${FILES}
+install: PACKAGES ${FILES}
 ifndef CLEAN
 	$(call DISABLE,dhcpcd)
 	$(call DISABLE,avahi-daemon)
@@ -120,7 +132,6 @@ endif
 ifdef LAN_SSID
 	$(call ENABLE,hostapd)
 endif
-	@echo "INSTALL COMPLETE!"
 else
 	$(call DISABLE,wpa_supplicant@wlan0)
 	$(call DISABLE,hostapd)
@@ -131,28 +142,77 @@ else
 	$(call ENABLE,dhcpcd)
 	$(call ENABLE,networking)
 endif
+ifeq (${CLEAN},)
+	@echo "INSTALL COMPLETE!"
+else ifeq (${CLEAN},1)
+	@echo "CLEAN COMPLETE!"
+else ifeq (${CLEAN},2)
+	@echo "UNINSTALL COMPLETE!"
+endif
+	@echo "Please reboot now."
 
 ifndef CLEAN
 # Install packages first
 PACKAGES:
 	$(call INSTALL,${PACKAGES})
 
-# Install overlay after packages
-${OVERLAY}: PACKAGES
-	mkdir -p /$(dir $@)
-	cp -vP overlay/$@ /$@
-
-# Update files after overlay
-${FILES}: ${OVERLAY}
+# Update files after packages
+${FILES}: ${PACKAGES}
 else
-# Delete files before overlay
-${OVERLAY}: ${FILES}
-	rm -f /$@
-
-# Delete overlay before packages
-PACKAGES: ${OVERLAY}
+# Delete files before packages
+PACKAGES: ${FILES}
 ifeq (${CLEAN},2)
 	$(call REMOVE,${PACKAGES})
+endif
+endif
+
+# add rasping to hostapd if LAN_SSID defined
+/etc/default/hostapd:
+	sed -i '/rasping start/,/rasping end/d' $@ || true # first delete the old
+ifndef CLEAN
+ifdef LAN_SSID
+	mkdir -p $(dir $@)
+	echo '# rasping start' >> $@
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo 'DAEMON_CONF=/etc/hostapd/rasping.conf' >> $@
+	echo '# rasping end' >> $@
+endif
+endif
+
+# create hostapd config if LAN_SSID is defined
+/etc/hostapd/rasping.conf:
+	rm -f $@
+ifndef CLEAN
+	mkdir -p $(dir $@)
+ifdef LAN_SSID
+	echo '# Raspberry Pi NAT Gateway' >> $@
+ifdef WAN_SSID
+	echo 'interface=wlan1' >> $@
+else
+	echo 'interface=wlan0' >> $@
+endif
+	echo 'bridge=br0' >> $@
+	echo 'ssid=$(call quote,${LAN_SSID})' >> $@
+	echo 'ieee80211d=1' >> $@
+	echo 'country_code=${COUNTRY}' >> $@
+	echo 'channel=${LAN_CHANNEL}' >> $@
+ifneq ($(shell test ${LAN_CHANNEL} -gt 14 && echo yes),)
+	echo 'hw_mode=a' >> $@
+	echo 'ieee80211n=1' >> $@
+	echo 'ieee80211ac=1' >> $@
+else
+	echo 'hw_mode=g' >> $@
+	echo 'ieee80211n=1' >> $@
+endif
+	echo 'wmm_enabled=0' >> $@
+	echo 'macaddr_acl=0' >> $@
+	echo 'ignore_broadcast_ssid=0' >> $@
+	echo 'auth_algs=1' >> $@
+	echo 'wpa=2' >> $@
+	echo 'wpa_passphrase=$(call quote,${LAN_PASSPHRASE})' >> $@
+	echo 'wpa_key_mgmt=WPA-PSK' >> $@
+	echo 'wpa_pairwise=TKIP' >> $@
+	echo 'rsn_pairwise=CCMP' >> $@
 endif
 endif
 
@@ -195,9 +255,97 @@ ifndef CLEAN
 	ip6tables-save -f $@
 endif
 
-# cleanse legacy dhcpcd config
-/etc/dhcpcd.conf:
-	sed -i '/rasping start/,/rasping end/d' $@ || true
+# show status on login screen
+/etc/issue.d/rasping.issue:
+	rm -f $(dir $@)/rasping* # this also deletes legacy rasping.X.issue
+ifndef CLEAN
+	mkdir -p $(dir $@)
+	echo '\e{bold}Raspberry Pi NAT gateway' >> $@
+ifdef WAN_SSID
+	echo 'WAN MAC: '$(cat /sys/class/net/wlan0/address) >> $@
+	echo 'WAN IP : \4{wlan0}' >> $@
+else
+	echo 'WAN MAC: '$(cat /sys/class/net/eth1/address) >> $@
+	echo 'WAN IP : \4{eth0}' >> $@
+endif
+	echo 'LAN IP : \4{br0}' >> $@
+	echo '\e{reset}' >> $@
+endif
+
+# disable resolvconf.conf, if it's installed
+/etc/resolvconf.conf:
+	sed -i '/rasping start/,/rasping end/d' $@ || true # first delete the old
+ifndef CLEAN
+	if [ -f $@ ]; then \
+	  echo '# rasping start' >> $@; \
+	  echo '# Raspberry Pi NAT Gateway' >> $@; \
+	  echo 'resolvconf=NO' >> $@; \
+	  echo '# rasping end' >> $@; \
+	fi
+endif
+
+# kernel configuration
+/etc/sysctl.d/rasping.conf:
+	rm -f $@
+ifndef CLEAN
+	mkdir -p $(dir $@)
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo 'net.ipv6.conf.all.disable_ipv6=1' >> $@
+	echo 'net.ipv4.ip_forward=1' >> $@
+	echo 'net.ipv4.conf.all.route_localnet=1' >> $@
+	echo 'nes.ipv4.conf.all.rp_filter=1' >> $@
+	echo 'net.ipv4.conf.all.accept_redirects=0' >> $@
+	echo 'net.ipv4.tcp_syncookies=1' >> $@
+endif
+
+# tell networkd about the lan bridge
+/etc/systemd/network/rasping-br0.network:
+	rm -f $@
+ifndef CLEAN
+	mkdir -p $(dir $@)
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo '[Match]' >> $@
+	echo 'Name=br0' >> $@
+	echo '[Network]' >> $@
+	echo 'Address=${LAN_IP}/24' >> $@
+	echo 'ConfigureWithoutCarrier=true' >> $@
+	echo 'LinkLocalAddressing=no' >> $@
+ifdef DHCP_RANGE
+	echo 'DHCPServer=yes' >> $@
+	echo '[DHCPServer]' >> $@
+	echo 'PoolOffset=${dhcpoffset}' >> $@
+	echo 'PoolSize=${dhcpsize}' >> $@
+	echo 'MaxLeaseTimeSec=3600' >> $@
+endif
+endif
+
+# tell networkd about lan devices
+/etc/systemd/network/rasping-lan.network:
+	rm -f $@
+ifndef CLEAN
+	mkdir -p $(dir $@)
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo '[Match]' >> $@
+ifdef WAN_SSID
+	echo 'Name=eth* usb*' >> $@
+else
+	echo 'Name=eth[1-9] usb*' >> $@
+endif
+	echo '[Network]' >> $@
+	echo 'LinkLocalAddressing=no' >> $@
+	echo 'Bridge=br0' >> $@
+endif
+
+# tell networkd about the bridge
+/etc/systemd/network/rasping.netdev:
+	rf -f $@
+ifndef CLEAN
+	mkdir -p $(dir $@)
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo '[netdev]' >> $@
+	echo 'Name=br0' >> $@
+	echo 'kind=bridge' >> $@
+endif
 
 # tell networkd about wan device
 /etc/systemd/network/rasping-wan.network:
@@ -222,105 +370,23 @@ else
 endif
 endif
 
-# tell networkd about lan devices
-/etc/systemd/network/rasping-lan.network:
-	rm -f $@
-ifndef CLEAN
-	mkdir -p $(dir $@)
-	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo '[Match]' >> $@
-ifdef WAN_SSID
-	echo 'Name=eth* usb*' >> $@
-else
-	echo 'Name=eth[1-9] usb*' >> $@
-endif
-	echo '[Network]' >> $@
-	echo 'LinkLocalAddressing=no' >> $@
-	echo 'Bridge=br0' >> $@
-endif
-
-ifneq (${DHCP_RANGE},)
-# convert DHCP_RANGE=firstIP,lastIP to pool offset and size
-COMMA=,
-r=$(subst $(COMMA), ,${DHCP_RANGE})
-offset=$(lastword $(subst ., ,$(firstword $r)))
-size=$(shell echo $$(($(lastword $(subst ., ,$(lastword $r)))-${offset}+1)))
-endif
-
-# tell networkd about the lan bridge
-/etc/systemd/network/rasping-br0.network:
-	rm -f $@
-ifndef CLEAN
-	mkdir -p $(dir $@)
-	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo '[Match]' >> $@
-	echo 'Name=br0' >> $@
-	echo '[Network]' >> $@
-	echo 'Address=${LAN_IP}/24' >> $@
-	echo 'ConfigureWithoutCarrier=true' >> $@
-	echo 'LinkLocalAddressing=no' >> $@
-ifdef DHCP_RANGE
-	echo 'DHCPServer=yes' >> $@
-	echo '[DHCPServer]' >> $@
-	echo 'PoolOffset=${offset}' >> $@
-	echo 'PoolSize=${size}' >> $@
-	echo 'MaxLeaseTimeSec=3600' >> $@
-endif
-endif
-
-# enable hostapd if LAN_SSID defined
-/etc/default/hostapd:
+# configure system resolved
+/etc/systemd/resolved.conf:
 	sed -i '/rasping start/,/rasping end/d' $@ || true # first delete the old
 ifndef CLEAN
-ifdef LAN_SSID
-	mkdir -p $(dir $@)
 	echo '# rasping start' >> $@
 	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo 'DAEMON_CONF=/etc/hostapd/rasping.conf' >> $@
+	echo 'FallbackDNS=1.1.1.1 8.8.8.8' >> $@
+	echo 'DNSSEC=no' >> $@
 	echo '# rasping end' >> $@
 endif
-endif
 
-# create hostapd config (if LAN_SSID is defined)
-/etc/hostapd/rasping.conf:
-	rm -f $@
-ifndef CLEAN
-ifdef LAN_SSID
-	echo '# Raspberry Pi NAT Gateway' >> $@
-ifdef WAN_SSID
-	echo 'interface=wlan1' >> $@
-else
-	echo 'interface=wlan0' >> $@
-endif
-	echo 'bridge=br0' >> $@
-	echo 'ssid=$(call quote,${LAN_SSID})' >> $@
-	echo 'ieee80211d=1' >> $@
-	echo 'country_code=${COUNTRY}' >> $@
-	echo 'channel=${LAN_CHANNEL}' >> $@
-ifneq ($(shell test ${LAN_CHANNEL} -gt 14 && echo yes),)
-	echo 'hw_mode=a' >> $@
-	echo 'ieee80211n=1' >> $@
-	echo 'ieee80211ac=1' >> $@
-else
-	echo 'hw_mode=g' >> $@
-	echo 'ieee80211n=1' >> $@
-endif
-	echo 'wmm_enabled=0' >> $@
-	echo 'macaddr_acl=0' >> $@
-	echo 'ignore_broadcast_ssid=0' >> $@
-	echo 'auth_algs=1' >> $@
-	echo 'wpa=2' >> $@
-	echo 'wpa_passphrase=$(call quote,${LAN_PASSPHRASE})' >> $@
-	echo 'wpa_key_mgmt=WPA-PSK' >> $@
-	echo 'wpa_pairwise=TKIP' >> $@
-	echo 'rsn_pairwise=CCMP' >> $@
-endif
-endif
-
+# attach wlan0 to router if WAN_SSID
 /etc/wpa_supplicant/wpa_supplicant-wlan0.conf:
 	rm -f $@
 ifndef CLEAN
 ifdef WAN_SSID
+	mkdir -p $(dir $@)
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev' >> $@
 	echo 'update_config=1' >> $@
@@ -334,31 +400,11 @@ ifdef WAN_SSID
 endif
 endif
 
-/etc/resolvconf.conf:
-	sed -i '/rasping start/,/rasping end/d' $@ || true # first delete the old
-ifndef CLEAN
-	echo '# rasping start' >> $@
-	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo 'resolvconf=NO' >> $@
-	echo '# rasping end' >> $@
-endif
-
-/etc/systemd/resolved.conf:
-	sed -i '/rasping start/,/rasping end/d' $@ || true # first delete the old
-ifndef CLEAN
-	echo '# rasping start' >> $@
-	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo 'FallbackDNS=1.1.1.1 8.8.8.8' >> $@
-	echo 'DNSSEC=no' >> $@
-	echo '# rasping end' >> $@
-endif
+# always delete legacy config from dhcpcd.conf
+/etc/dhcpcd.conf:
+	sed -i '/rasping start/,/rasping end/d' $@ || true
 
 .PHONY: clean uninstall
-clean:
-	${MAKE} CLEAN=1
-	@echo "CLEAN COMPLETE"
-
-uninstall:
-	${MAKE} CLEAN=2
-	@echo "UNINSTALL COMPLETE"
+clean:; exec ${MAKE} CLEAN=1
+uninstall:; exec ${MAKE} CLEAN=2
 endif

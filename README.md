@@ -1,13 +1,13 @@
 Rasping - Raspberry Pi NAT Gateway
 
-Configure a Raspberry Pi 3 or 4 as a NAT gateway, in one of three basic
+Configure a Raspberry Pi 3B/B+/4 as a NAT gateway, in one of three basic
 configurations:
 
-    Wired WAN and wired LAN via USB ethernet dongle(s)
+    Wired WAN via built-in ethernet, and wired LAN via USB ethernet dongle(s)
 
-    Wired WAN and wireless LAN (and optional dongles)
+    Wired WAN via built-in ethernet and wireless LAN (also optional dongles)
 
-    Wireless WAN and wired LAN via built-in ethernet (and optional dongles)
+    Wireless WAN and wired LAN via built-in ethernet (also optional dongles)
 
 To install:
 
@@ -17,37 +17,51 @@ To install:
 
     Unzip and extract the img file, it will be about 2GB.
 
-    Using a PC, copy the img file to an 8GB SDcard with dd on linux/darwin or
+    Optional: on a linux PC you can alter the image now so ssh will start on
+    the first boot:
+
+            mkdir xxx
+            sudo mount -oloop,offset=4096K /path/to/the.img xxx
+            sudo touch xxx/ssh
+            sudo umount xxx
+
+    Copy the img file to an 8GB SDcard with dd on linux/darwin or
     Win32DiskImager on Windows.
 
     To log in via SSH:
 
-        Remove and reinstall the SDcard into the PC so it re-reads the
-        partition table.
+        If you did not perform the "touch x/ssh" operation above then:
 
-        A Windows machine should mount the boot partition automatically, on
-        Linux you'll need to manually mount it (the first partition, eg
-        /dev/sdb1 or /dev/mmcblk0p1, etc).
+            Remove and reinstall the SDcard into the PC so it re-reads the
+            partition table.
 
-        Ccreate an empty file named 'ssh' in the boot partition.
+            Windows should mount the boot partition automatically, on Linux you
+            may need to mount it manually, it's the first partition i.e.
+            /dev/sdb1 or /dev/mmcblk0p1, etc). The correct directory will
+            contain about 20 files including config.txt.
 
-        Unmount and insert the SD card into the Pi, attach it to local
-        ethernet, then apply power.
+            Create an empty file named "ssh" in the boot partition.
 
-        On the PC, run the python script "sscan" (incldued in this repo) to
+            Unmount the partition before removing the SD card from the PC.
+
+        Insert the SD card into the Pi, attach it to local ethernet, then apply
+        power.
+
+        On the PC, run the python script "sscan" (included in this repo) to
         list all open ssh ports on the local subnet. The Pi will appear as
         something like:
 
             192.168.1.144 : SSH-2.0-OpenSSH_7.9p1 Raspbian-10
 
-        Since it can take a minute or so for the Pi to boot, you'll have to run
-        sscan several times.
+        It will take a minute or so for the Pi to boot, just run sscan repeatedly
+        until it shows up.
 
-        Once the IP address has been detected, just "ssh pi@ip.ad.re.ss" from your
-        PC, with password "raspberry".
+        Once the IP address has been detected, you can "ssh pi@ip.ad.re.ss" on your
+        PC and log in with password "raspberry".
 
-        Be aware that the 'ssh' file will be automatically deleted, so if you
-        lose power you'll have to recreate the empty file.
+        Be aware that the magic "ssh" file will only work once. If the Pi
+        resets for some reason before you"ve reached the "systemctl enable ssh"
+        step below then you'll need to re-create the file.
 
     To log in via text console:
 
@@ -56,14 +70,15 @@ To install:
 
         When the login prompt appears, log in as "pi" with password "raspberry".
 
-        Note the default keyboard mapping is for UK keyboards. If you have a
-        different layout, first enter the command:
+        The default keyboard mapping is for UK keyboards. If you have a
+        different layout you may have trouble editing files. Enter the command:
 
             sudo raspi-config nonint do_configure_board US
 
-        Replace "US" with the desired ISO-3116 country code (see the Wikipedia page for a list).
+        Where US" is your desired ISO-3116 country code, see
+        https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
 
-    Now enter the following commands:
+    Now that you're logged in, enter the following commands:
 
         sudo systemctl enable ssh        -- permanently enable ssh
 
@@ -71,18 +86,18 @@ To install:
 
         sudo apt update                  -- download latest package metadata
 
-        sudo apt -y upgrade              -- download and install updated packages, this may take a while
+        sudo apt -y upgrade              -- download and install updated packages, this will take a few minutes
 
         sudo reboot
 
-    WAit for the Pi to boot then log in with the new password. Enter the following:
+    Log back into the Pi with your new password and enter the following:
 
         sudo apt -y install git
 
         git clone https://github.com/glitchub/rasping
 
-    At this point you 'll have a "rasping" directory containing this repo.  The
-    file "rasping.cfg" defines all configurable parameters, and provides a
+    At this point the Pi will have a "rasping" directory containing this repo.
+    The file "rasping.cfg" defines all configurable parameters, and provides a
     detailed description of each.
 
         cd rasping
@@ -91,17 +106,16 @@ To install:
 
         make
 
-    The make process will install several packages, rewrite system files, etc.
-    When it's done you'll see INSTALL COMPLETE.
+    The make process will install packages, rewrite system files, and perform a
+    bunch if systemctl operations. When it's done you'll see "INSTALL COMPLETE".
 
     Reboot the Pi and it will come up in NAT gateway mode automatically.
 
-    Depending on configuration you'll need to unplug the ethernet from the
-    network and attach USB ethernet dongles.
+    You'll be able to ssh to the Pi from any LAN device (to the LAN_IP
+    address), and also from the WAN if you UNBLOCKed port 22.
 
-    You'll be able to ssh from any LAN port (to the LAN_IP address), and also
-    from WAN if you UNBLOCKed port 22.
+    You can make changes to the config file and install them with "make",
+    followed by reboot.
 
-    Note you can restore the original network configuration 'make uninstall',
-    followed by a reboot.
-
+    You can also restore the original network configuration with "make
+    uninstall", followed by reboot.
