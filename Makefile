@@ -154,7 +154,7 @@ PACKAGES:
 	$(call INSTALL,${PACKAGES})
 
 # Update files after packages
-${FILES}: ${PACKAGES}
+${FILES}: PACKAGES
 else
 # Delete files before packages
 PACKAGES: ${FILES}
@@ -402,8 +402,6 @@ endif
 	sed -i '/rasping start/,/rasping end/d' $@ || true
 
 .PHONY: clean uninstall
-
-clean:; exec ${MAKE} CLEAN=1
-
-uninstall:; exec ${MAKE} CLEAN=2
+clean:; ${MAKE} CLEAN=1
+uninstall:; ${MAKE} CLEAN=2
 endif
