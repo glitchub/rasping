@@ -40,7 +40,6 @@ DISABLE=systemctl --quiet is-enabled $1 && systemctl disable --now $1 && systemc
 # escape string for use in shell single quotes
 quote=$(subst ','\'',$1)
 
-
 include rasping.cfg
 
 # sanitize and sanity check
@@ -71,8 +70,6 @@ r=$(subst $(COMMA), ,${DHCP_RANGE})
 dhcpoffset=$(lastword $(subst ., ,$(firstword $r)))
 dhcpsize=$(shell echo $$(($(lastword $(subst ., ,$(lastword $r)))-${dhcpoffset}+1)))
 $(info Using DHCP_RANGE = "${DHCP_RANGE}" (offset=${dhcpoffset}, size=${dhcpsize})
-endif
-
 endif
 
 ifdef UNBLOCK
@@ -405,6 +402,8 @@ endif
 	sed -i '/rasping start/,/rasping end/d' $@ || true
 
 .PHONY: clean uninstall
+
 clean:; ${MAKE} CLEAN=1
+
 uninstall:; ${MAKE} CLEAN=2
 endif
