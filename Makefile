@@ -257,15 +257,15 @@ endif
 	rm -f $(dir $@)/rasping* # this also deletes legacy rasping.X.issue
 ifndef CLEAN
 	mkdir -p $(dir $@)
-	echo '\e{bold}Raspberry Pi NAT gateway' >> $@
+	echo '\\e{bold}Raspberry Pi NAT gateway' >> $@
 ifdef WAN_SSID
 	echo 'WAN MAC: '$(cat /sys/class/net/wlan0/address) >> $@
-	echo 'WAN IP : \4{wlan0}' >> $@
+	echo 'WAN IP : \\4{wlan0}' >> $@
 else
-	echo 'WAN MAC: '$(cat /sys/class/net/eth1/address) >> $@
-	echo 'WAN IP : \4{eth0}' >> $@
+	echo 'WAN MAC: '$(cat /sys/class/net/eth0/address) >> $@
+	echo 'WAN IP : \\4{eth0}' >> $@
 endif
-	echo 'LAN IP : \4{br0}' >> $@
+	echo 'LAN IP : \\4{br0}' >> $@
 	echo '\e{reset}' >> $@
 endif
 
