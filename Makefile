@@ -69,7 +69,7 @@ COMMA=,
 r=$(subst $(COMMA), ,${DHCP_RANGE})
 dhcpoffset=$(lastword $(subst ., ,$(firstword $r)))
 dhcpsize=$(shell echo $$(($(lastword $(subst ., ,$(lastword $r)))-${dhcpoffset}+1)))
-$(info Using DHCP_RANGE = "${DHCP_RANGE}" (offset=${dhcpoffset}, size=${dhcpsize})
+$(info Using DHCP_RANGE = "${DHCP_RANGE}" (offset=${dhcpoffset}, size=${dhcpsize}))
 endif
 
 ifdef UNBLOCK
