@@ -187,7 +187,7 @@ else
 	echo 'interface=wlan0' >> $@
 endif
 	echo 'bridge=br0' >> $@
-	echo 'ssid=$($(subst ','\'',${LAN_SSID})' >> $@
+	echo 'ssid=$(subst ','\'',${LAN_SSID})' >> $@
 	echo 'ieee80211d=1' >> $@
 	echo 'country_code=${COUNTRY}' >> $@
 	echo 'channel=${LAN_CHANNEL}' >> $@
@@ -204,11 +204,11 @@ endif
 	echo 'ignore_broadcast_ssid=0' >> $@
 	echo 'auth_algs=1' >> $@
 	echo 'wpa=2' >> $@
-	echo 'wpa_passphrase=$($(subst ','\'',${LAN_PASSPHRASE})' >> $@
+	echo 'wpa_passphrase=$(subst ','\'',${LAN_PASSPHRASE})' >> $@
 	echo 'wpa_key_mgmt=WPA-PSK' >> $@
 	echo 'wpa_pairwise=TKIP' >> $@
 	echo 'rsn_pairwise=CCMP' >> $@
-        echo 'ctrl_interface=/var/run/hostapd' >> $@
+	echo 'ctrl_interface=/var/run/hostapd' >> $@
 endif
 endif
 
@@ -390,8 +390,8 @@ ifdef WAN_SSID
 	echo 'network={' >> $@
 	echo '	scan_ssid=1' >> $@
 	echo '	key_mgmt=WPA-PSK' >> $@
-	echo '	ssid=$($(subst ','\'',${WAN_SSID})' >> $@
-	echo '	psk=$($(subst ','\'',${WAN_PASSPHRASE})' >> $@
+	echo '	ssid=$(subst ','\'',${WAN_SSID})' >> $@
+	echo '	psk=$(subst ','\'',${WAN_PASSPHRASE})' >> $@
 	echo '}' >> $@
 endif
 endif
