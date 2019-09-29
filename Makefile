@@ -30,7 +30,7 @@ ENABLE=systemctl unmask $1 && systemctl enable $1
 DISABLE=systemctl --quiet is-enabled $1 && systemctl disable --now $1 && systemctl mask $1 || true
 
 # escape string for use in shell single quotes
-quote='$(subst ','\'',$1)'
+quote=$(subst ','\'',$1)
 
 ifneq (${USER},root)
 # become root if not already
@@ -44,12 +44,10 @@ LAN_IP:=$(strip ${LAN_IP})
 DHCP_RANGE:=$(strip ${DHCP_RANGE})
 UNBLOCK:=$(strip ${UNBLOCK})
 FORWARD:=$(strip ${FORWARD})
-ifndef RAWSTRINGS
 LAN_SSID:=$(strip ${LAN_SSID})
 LAN_PASSPHRASE:=$(strip ${LAN_PASSPHRASE})
 WAN_SSID:=$(strip ${WAN_SSID})
 WAN_PASSPHRASE:=$(strip ${WAN_PASSPHRASE})
-endif
 LAN_CHANNEL:=$(strip ${LAN_CHANNEL})
 WAN_IP:=$(strip ${WAN_IP})
 WAN_GW:=$(strip ${WAN_GW})
@@ -59,14 +57,14 @@ COUNTRY:=$(strip ${COUNTRY})
 ifndef LAN_IP
 $(error Must define LAN_IP)
 endif
-$(warning Using LAN_IP = ${LAN_IP})
+$(info Using LAN_IP = ${LAN_IP})
 
 ifdef DHCP_RANGE
-$(warning Using DHCP_RANGE = "${DHCP_RANGE}")
+$(info Using DHCP_RANGE = "${DHCP_RANGE}")
 endif
 
 ifndef UNBLOCK
-$(warning Using UNBLOCK = "${UNBLOCK}")
+$(info Using UNBLOCK = "${UNBLOCK}")
 endif
 
 ifdef LAN_SSID
@@ -79,7 +77,7 @@ endif
 ifndef COUNTRY
 $(error Must define COUNTRY with LAN_SSID)
 endif
-$(warning Using LAN_SSID="${LAN_SSID}", LAN_PASSPHRASE="${LAN_PASSPHRASE}", LAN_CHANNEL="${LAN_CHANNEL}", COUNTRY="${COUNTRY}")
+$(info Using LAN_SSID="${LAN_SSID}", LAN_PASSPHRASE="${LAN_PASSPHRASE}", LAN_CHANNEL="${LAN_CHANNEL}", COUNTRY="${COUNTRY}")
 endif
 
 ifdef WAN_SSID
@@ -89,7 +87,7 @@ endif
 ifndef COUNTRY
 $(error Must define COUNTRY with WAN_SSID)
 endif
-$(warning Using WAN_SSID="${WAN_SSID}", WAN_PASSPHRASE="${WAN_PASSPHRASE}", COUNTRY="${COUNTRY}")
+$(info Using WAN_SSID="${WAN_SSID}", WAN_PASSPHRASE="${WAN_PASSPHRASE}", COUNTRY="${COUNTRY}")
 endif
 
 ifdef WAN_IP
@@ -99,7 +97,7 @@ endif
 ifndef WAN_DNS
 $(error Must define WAN_DNS with WAN_IP)
 endif
-$(warning Using WAN_IP="${WAN_IP}", WAN_GW="${WAN_GW}", WAN_DNS="${WAN_DNS}")
+$(info Using WAN_IP="${WAN_IP}", WAN_GW="${WAN_GW}", WAN_DNS="${WAN_DNS}")
 endif
 
 # recreate everything
@@ -299,7 +297,7 @@ endif
 	echo 'ieee80211d=1' >> $@
 	echo 'country_code=${COUNTRY}' >> $@
 	echo 'channel=${LAN_CHANNEL}' >> $@
-ifneq ($(shell ((${LAN_CHANNEL} > 14)) && echo yes),)
+ifneq ($(shell test ${LAN_CHANNEL} -gt 14 && echo yes),)
 	echo 'hw_mode=a' >> $@
 	echo 'ieee80211n=1' >> $@
 	echo 'ieee80211ac=1' >> $@
@@ -350,6 +348,7 @@ endif
 ifndef CLEAN
 	echo '# rasping start' >> $@
 	echo '# Raspberry Pi NAT Gateway' >> $@
+        echo 'FallbackDNS=1.1.1.1 8.8.8.8' >> $@
 	echo 'DNSSEC=no' >> $@
 	echo '# rasping end' >> $@
 endif
