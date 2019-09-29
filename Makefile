@@ -259,10 +259,10 @@ ifndef CLEAN
 	mkdir -p $(dir $@)
 	echo '\\e{bold}Raspberry Pi NAT gateway' >> $@
 ifdef WAN_SSID
-	echo 'WAN MAC: '$(cat /sys/class/net/wlan0/address) >> $@
+	echo 'WAN MAC: '$$(cat /sys/class/net/wlan0/address) >> $@
 	echo 'WAN IP : \\4{wlan0}' >> $@
 else
-	echo 'WAN MAC: '$(cat /sys/class/net/eth0/address) >> $@
+	echo 'WAN MAC: '$$(cat /sys/class/net/eth0/address) >> $@
 	echo 'WAN IP : \\4{eth0}' >> $@
 endif
 	echo 'LAN IP : \\4{br0}' >> $@
