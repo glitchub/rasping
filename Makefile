@@ -135,7 +135,7 @@ else
 	$(call DISABLE,systemd-networkd)
 	$(call DISABLE,systemd-networkd.socket)
 	$(call DISABLE,systemd-resolved)
-	rm /etc/resolv.conf
+	rm -f /etc/resolv.conf
 	$(call ENABLE,dhcpcd)
 	$(call ENABLE,networking)
 endif
