@@ -1,8 +1,8 @@
 # Raspberry PI NAT Gateway
 
 # Make sure we're running the right code
-ifeq ($(shell grep "Raspberry Pi reference 2019-06-20" /etc/rpi-issue),)
-$(error "Requires Raspberry Pi running 2019-06-20-raspbin-buster-lite.img")
+ifeq ($(shell [ -f /etc/rpi-issue ] && [ $$(systemd --version | awk '{print $$2;exit}') -ge 241 ] && echo yes),)
+$(error Requires Raspberry Pi with systemd version 241 or later)
 endif
 
 ifneq (${USER},root)
