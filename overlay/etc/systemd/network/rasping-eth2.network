@@ -1,6 +1,0 @@
-# Raspberry Pi NAT Gateway
-[Match]
-Name=eth2
-
-[Network]
-Bridge=br0

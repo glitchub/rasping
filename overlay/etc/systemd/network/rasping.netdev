@@ -1,4 +1,0 @@
-# Raspberry Pi NAT Gateway
-[NetDev]
-Name=br0
-Kind=bridge
