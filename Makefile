@@ -45,8 +45,8 @@ FILES += /etc/systemd/network/rasping-bridge.netdev
 # recreate everything
 .PHONY: install PACKAGES ${FILES}
 
-ifndef CLEAN
 install: PACKAGES ${FILES}
+ifndef CLEAN
 	systemctl enable systemd-networkd
 	systemctl disable wpa_supplicant
 ifdef LAN_SSID
@@ -55,16 +55,12 @@ ifdef LAN_SSID
 endif
 	@echo "INSTALL COMPLETE"
 
-# Install packages first
+# Install packages before files
 ${FILES}: PACKAGES
 PACKAGES:
 	DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
 else
-install: PACKAGES ${FILES}
-	# delete downrev files
-	rm -f /etc/issue.d/rasping*
-	rm -f /etc/systemd/network/rasping*
-
+# Delete files before packages
 PACKAGES: ${FILES}
 ifeq (${CLEAN},2)
 	DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y ${PACKAGES}
@@ -170,7 +166,7 @@ endif
 
 # show IPs etc on login screen
 /etc/issue.d/rasping.issue:
-	rm -f $@
+	rm -f /etc/issue,d/rasping* # nuke residuals
 ifndef CLEAN
 	mkdir -p $(dir $@)
 	echo '\e{bold}Raspberry Pi NAT Gateway' >> $@
@@ -193,9 +189,9 @@ ifndef CLEAN
 	echo 'net.ipv4.tcp_syncookies=1' >> $@
 endif
 
-# tell networkd to createa a bridge device
+# tell networkd to create a bridge device, this goes before the others
 /etc/systemd/network/rasping-br0.netdev:
-	rm -f $@
+	rm -f /etc/systemd/network/rasping* # nuke residuals
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[NetDev]' >> $@
@@ -204,8 +200,7 @@ ifndef CLEAN
 endif
 
 # tell networkd about bridge LAN_IP address
-/etc/systemd/network/rasping-br0.network:
-	rm -f $@
+/etc/systemd/network/rasping-br0.network: /etc/systemd/networkrasping-br0.netdev
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
@@ -217,8 +212,7 @@ ifndef CLEAN
 endif
 
 # tell networkd to attach everything except eth0 and br0 to the bridge
-/etc/systemd/network/rasping-bridged.network:
-	rm -f $@
+/etc/systemd/network/rasping-bridged.network: /etc/systemd/networkrasping-br0.netdev
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
