@@ -15,14 +15,16 @@ override LAN_IP:=$(strip ${LAN_IP})
 override DHCP_RANGE:=$(strip ${DHCP_RANGE})
 override UNBLOCK:=$(strip ${UNBLOCK})
 override FORWARD:=$(strip ${FORWARD})
-override WAN_SSID:=$(strip ${WAN_SSID})
-override WAN_PASSPHRASE:=$(strip ${WAN_PASSPHRASE})
-override LAN_SSID:=$(strip ${LAN_SSID})
-override LAN_PASSPHRASE:=$(strip ${LAN_PASSPHRASE})
-override LAN_CHANNEL:=$(strip ${LAN_CHANNEL})
 override WAN_IP:=$(strip ${WAN_IP})
 override WAN_GW:=$(strip ${WAN_GW})
 override WAN_DNS:=$(strip ${WAN_DNS})
+override LAN_CHANNEL:=$(strip ${LAN_CHANNEL})
+
+# escape \ -> \\ and ' -> \\' in ssid's and passphrases
+override WAN_SSID:=$(subst ',\\',$(subst \,\\,$(strip ${WAN_SSID})))
+override WAN_PASSPHRASE:=$(subst ',\\',$(subst \,\\$(strip ${WAN_PASSPHRASE})))
+override LAN_SSID:=$(subst ',\\',$(subst \,\\$(strip ${LAN_SSID})))
+override LAN_PASSPHRASE:=$(subst ',\\',$(subst \,\\$(strip ${LAN_PASSPHRASE})))
 
 ifndef LAN_IP
   $(error Must specify LAN_IP)
@@ -38,9 +40,10 @@ endif
 ifndef WAN_PASSPHRASE
 	$(error Must set WAN_PASSPHRASE with WAN_SSID)
 endif
-  WANIF=wlan0
+ver
+WANIF=wlan0
 else
-  WANIF=eth0
+WANIF=eth0
 endif
 
 ifdef LAN_SSID
@@ -169,8 +172,8 @@ ifdef WAN_SSID
 	echo 'update_config=1' >> $@
 	echo 'country=${COUNTRY}' >> $@
 	echo 'network={' >> $@
-	echo '  ssid=$(subst ','\'',${WAN_SSID})' >> $@        #### '
-	echo '  psk=$(subst ','\'',${WAN_PASSPHRASE})' >> $@   #### '
+	echo '  ssid=${WAN_SSID}' >> $@
+	echo '  psk=${WAN_PASSPHRASE}' >> $@
 	echo '  scan_ssid=1' >> $@
 	echo '  key_mgmt=WPA-PSK' >> $@
 	echo '}' >> $@
@@ -198,7 +201,7 @@ ifdef LAN_SSID
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'interface=wlan0' >> $@
 	echo 'bridge=br0' >> $@
-	echo 'ssid=$(subst ','\'',${LAN_SSID})' >> $@    ####'
+	echo 'ssid=${LAN_SSID}' >> $@
 	echo 'ieee80211d=1' >> $@
 	echo 'country_code=${COUNTRY}' >> $@
 	echo 'channel=${LAN_CHANNEL}' >> $@
@@ -215,7 +218,7 @@ endif
 	echo 'auth_algs=1' >> $@
 	echo 'ignore_broadcast_ssid=0' >> $@
 	echo 'wpa=2' >> $@
-	echo 'wpa_passphrase=$(subst ','\'',${LAN_PASSPHRASE})' >> $@   ####'
+	echo 'wpa_passphrase=${LAN_PASSPHRASE}' >> $@
 	echo 'wpa_key_mgmt=WPA-PSK' >> $@
 	echo 'wpa_pairwise=TKIP' >> $@
 	echo 'rsn_pairwise=CCMP' >> $@
@@ -227,10 +230,10 @@ endif
 	rm -f /etc/issue.d/rasping* # nuke residuals
 ifndef CLEAN
 	mkdir -p $(dir $@)
-	echo '\e{bold}Raspberry Pi NAT Gateway' >> $@
+	echo '\\e{bold}Raspberry Pi NAT Gateway' >> $@
 	echo 'WAN MAC : $$(cat /sys/class/net/${WANIF}/address)' >> $@
-	echo 'WAN IP  : \4{${WANIF}}' >> $@
-	echo 'LAN IP  : \4{br0}' >> $@
+	echo 'WAN IP  : \\4{${WANIF}}' >> $@
+	echo 'LAN IP  : \\4{br0}' >> $@
 	echo '\e{reset}' >> $@
 endif
 
