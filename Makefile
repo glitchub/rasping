@@ -43,7 +43,6 @@ endif
 ifndef WAN_PASSPHRASE
 	$(error Must set WAN_PASSPHRASE with WAN_SSID)
 endif
-ver
 WANIF=wlan0
 else
 WANIF=eth0
