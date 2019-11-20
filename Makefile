@@ -11,7 +11,7 @@ default ${MAKECMDGOALS}:; sudo -E ${MAKE} ${MAKECMDGOALS}
 else
 
 include rasping.cfg
-LAN_IP=$(strip ${LAN_IP})
+LAN_IP:=$(strip ${LAN_IP})
 DHCP_RANGE:=$(strip ${DHCP_RANGE})
 UNBLOCK:=$(strip ${UNBLOCK})
 FORWARD:=$(strip ${FORWARD})
@@ -45,31 +45,28 @@ FILES += /etc/systemd/network/rasping-bridge.netdev
 # recreate everything
 .PHONY: install PACKAGES ${FILES}
 
-install: PACKAGES ${FILES}
 ifndef CLEAN
+install: PACKAGES ${FILES}
 	systemctl enable systemd-networkd
 	systemctl disable wpa_supplicant
 ifdef LAN_SSID
 	systemctl unmask hostapd
 	systemctl enable hostapd
 endif
-	@echo "INSTALL COMPLETE!"
-endif
+	@echo "INSTALL COMPLETE"
 
-ifndef CLEAN
 # Install packages first
+${FILES}: PACKAGES
 PACKAGES:
 	DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
-
-# Update files after overlay
-${FILES}: ${OVERLAY}
 else
-# Delete files before overlay
-${OVERLAY}: ${FILES}
-	rm -f /$@
+install: PACKAGES ${FILES}
+        # delete downrev files
+        rm -f /etc/issue.d/rasping*
+        rm -f /etc/systemd/network/rasping*
+        echo "UNINSTALL COMPLETE"
 
-# Delete overlay before packages
-PACKAGES: ${OVERLAY}
+PACKAGES: ${FILES}
 ifeq (${CLEAN},2)
 	DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y ${PACKAGES}
 endif
@@ -134,7 +131,7 @@ endif
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'interface=br0' >> $@
-	$(if $(strip ${DHCP_RANGE}),echo 'dhcp-range=${DHCP_RANGE}' >> #@)
+	$(if $(strip ${DHCP_RANGE}),echo 'dhcp-range=${DHCP_RANGE}' >> $@)
 endif
 
 # enable hostapd (if LAN_SSID defined)
@@ -174,7 +171,7 @@ endif
 
 # show IPs etc on login screen
 /etc/issue.d/rasping.issue:
-	rm -f /etc/issue.d/rasping*
+	rm -f $@
 ifndef CLEAN
 	mkdir -p $(dir $@)
 	echo '\e{bold}Raspberry Pi NAT Gateway' >> $@
@@ -199,7 +196,7 @@ endif
 
 # tell networkd to createa a bridge device
 /etc/systemd/network/rasping-br0.netdev:
-	rm -f /etc/systemd/network/rasping*
+	rm -f $@
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[NetDev]' >> $@
@@ -222,7 +219,7 @@ endif
 
 # tell networkd to attach everything except eth0 and br0 to the bridge
 /etc/systemd/network/rasping-bridged.network:
-	rm -f /etc/systemd/network/rasping*
+	rm -f $@
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
