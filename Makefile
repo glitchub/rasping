@@ -233,7 +233,7 @@ endif
 ifndef CLEAN
 	mkdir -p $(dir $@)
 	echo '\e{bold}Raspberry Pi NAT Gateway' >> $@
-	echo 'WAN MAC : $$(cat /sys/class/net/${WANIF}/address)' >> $@
+	echo 'WAN MAC : '$$(cat /sys/class/net/${WANIF}/address) >> $@
 	echo 'WAN IP  : \4{${WANIF}}' >> $@
 	echo 'LAN IP  : \4{br0}' >> $@
 	echo '\e{reset}' >> $@
