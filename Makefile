@@ -61,10 +61,10 @@ PACKAGES:
 	DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
 else
 install: PACKAGES ${FILES}
-        # delete downrev files
-        rm -f /etc/issue.d/rasping*
-        rm -f /etc/systemd/network/rasping*
-        echo "UNINSTALL COMPLETE"
+	# delete downrev files
+	rm -f /etc/issue.d/rasping*
+	rm -f /etc/systemd/network/rasping*
+	echo "UNINSTALL COMPLETE"
 
 PACKAGES: ${FILES}
 ifeq (${CLEAN},2)
