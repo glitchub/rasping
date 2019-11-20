@@ -10,6 +10,8 @@ ifneq (${USER},root)
 default ${MAKECMDGOALS}:; sudo -E ${MAKE} ${MAKECMDGOALS}
 else
 
+SHELL=/bin/bash
+
 include rasping.cfg
 override LAN_IP:=$(strip ${LAN_IP})
 override DHCP_RANGE:=$(strip ${DHCP_RANGE})
@@ -20,11 +22,12 @@ override WAN_GW:=$(strip ${WAN_GW})
 override WAN_DNS:=$(strip ${WAN_DNS})
 override LAN_CHANNEL:=$(strip ${LAN_CHANNEL})
 
-# escape \ -> \\ and ' -> \\' in ssid's and passphrases
-override WAN_SSID:=$(subst ',\\',$(subst \,\\,$(strip ${WAN_SSID})))
-override WAN_PASSPHRASE:=$(subst ',\\',$(subst \,\\$(strip ${WAN_PASSPHRASE})))
-override LAN_SSID:=$(subst ',\\',$(subst \,\\$(strip ${LAN_SSID})))
-override LAN_PASSPHRASE:=$(subst ',\\',$(subst \,\\$(strip ${LAN_PASSPHRASE})))
+# escape ' -> '\'' in ssid's and passphrases
+override WAN_SSID:=$(subst ','\'',$(strip ${WAN_SSID}))
+override WAN_PASSPHRASE:=$(subst ','\'',$(strip ${WAN_PASSPHRASE}))
+override LAN_SSID:=$(subst ','\'',$(strip ${LAN_SSID}))
+override LAN_PASSPHRASE:=$(subst ','\'',$(strip ${LAN_PASSPHRASE}))
+# ' <- fix vi syntax highlight
 
 ifndef LAN_IP
   $(error Must specify LAN_IP)
