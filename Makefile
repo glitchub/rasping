@@ -11,19 +11,48 @@ default ${MAKECMDGOALS}:; sudo -E ${MAKE} ${MAKECMDGOALS}
 else
 
 include rasping.cfg
-LAN_IP:=$(strip ${LAN_IP})
-DHCP_RANGE:=$(strip ${DHCP_RANGE})
-UNBLOCK:=$(strip ${UNBLOCK})
-FORWARD:=$(strip ${FORWARD})
-LAN_SSID:=$(strip ${LAN_SSID})
-LAN_PASSPHRASE:=$(strip ${LAN_PASSPHRASE})
-LAN_CHANNEL:=$(strip ${LAN_CHANNEL})
-WAN_IP:=$(strip ${WAN_IP})
-WAN_GW:=$(strip ${WAN_GW})
-WAN_DNS:=$(strip ${WAN_DNS})
+override LAN_IP:=$(strip ${LAN_IP})
+override DHCP_RANGE:=$(strip ${DHCP_RANGE})
+override UNBLOCK:=$(strip ${UNBLOCK})
+override FORWARD:=$(strip ${FORWARD})
+override WAN_SSID:=$(strip ${WAN_SSID})
+override WAN_PASSPHRASE:=$(strip ${WAN_PASSPHRASE})
+override LAN_SSID:=$(strip ${LAN_SSID})
+override LAN_PASSPHRASE:=$(strip ${LAN_PASSPHRASE})
+override LAN_CHANNEL:=$(strip ${LAN_CHANNEL})
+override WAN_IP:=$(strip ${WAN_IP})
+override WAN_GW:=$(strip ${WAN_GW})
+override WAN_DNS:=$(strip ${WAN_DNS})
 
 ifndef LAN_IP
-$(error Must specify LAN_IP)
+  $(error Must specify LAN_IP)
+endif
+
+ifdef WAN_SSID
+  ifdef LAN_SSID
+    $(error Can't set WAN_SSID with LAN_SSID)
+  endif
+  ifndef COUNTRY
+    $(error Must specifiy COUNTRY with WAN_SSID)
+  endif
+  ifndef WAN_PASSPHRASE
+    $(error Must set WAN_PASSPHRASE with WAN_SSID)
+  endif
+  WANIF=wlan0
+else
+  WANIF=eth0
+fi
+
+ifdef LAN_SSID
+  ifndef COUNTRY
+    $(error Must specifiy COUNTRY with LAN_SSID)
+  endif
+  ifndef LAN_PASSPHRASE
+    $(error Must set LAN_PASSPHRASE with LAN_SSID)
+  endif
+  ifndef LAN_CHANNEL
+    $(error Must set LAN_CHANNEL with LAN_SSID)
+  endif
 endif
 
 # package to install
@@ -41,6 +70,7 @@ FILES += /etc/sysctl.d/rasping.conf
 FILES += /etc/systemd/network/rasping-br0.network
 FILES += /etc/systemd/network/rasping-bridged.network
 FILES += /etc/systemd/network/rasping-bridge.netdev
+FILES += /etc/wpa_supplicant/wpa_supplicant.conf
 
 # recreate everything
 .PHONY: install PACKAGES ${FILES}
@@ -48,10 +78,17 @@ FILES += /etc/systemd/network/rasping-bridge.netdev
 install: PACKAGES ${FILES}
 ifndef CLEAN
 	systemctl enable systemd-networkd
+stifdef WAN_SSID
+	systemctl enable wpa_supplicant
+else
 	systemctl disable wpa_supplicant
+endif
 ifdef LAN_SSID
 	systemctl unmask hostapd
 	systemctl enable hostapd
+else
+	systemctl disable hostapd
+	systemctl mask hostapd
 endif
 	@echo "INSTALL COMPLETE"
 
@@ -74,9 +111,9 @@ endif
 	iptables -F -tnat
 ifndef CLEAN
 	iptables -P INPUT DROP
-	iptables -A INPUT ! -i eth0 -j ACCEPT
+	iptables -A INPUT ! -i ${WANIF} -j ACCEPT
 	iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
-	iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+	iptables -t nat -A POSTROUTING -o ${WANIF} -j MASQUERADE
 ifdef UNBLOCK
 	for p in ${UNBLOCK}; do iptables -A INPUT -p tcp --dport $$p -j ACCEPT; done
 endif
@@ -99,19 +136,19 @@ ifndef CLEAN
 	ip6tables-save -f $@
 endif
 
-# append dhcpcd.conf to set eth0 address, static if WAN_IP is defined
+# append dhcpcd.conf to set WANIF address, static if WAN_IP is defined
 /etc/dhcpcd.conf:
 	sed -i '/rasping start/,/rasping end/d' $@
 ifndef CLEAN
 	echo '# rasping start' >> $@
 	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo 'allowinterfaces eth0' >> $@
+	echo 'allowinterfaces ${WANIF}' >> $@
 	echo 'ipv4only' >> $@
 	echo 'noipv4ll' >> $@
 	echo 'noalias' >> $@
 	echo 'timeout=300' >> $@
 ifdef WAN_IP
-	echo 'interface eth0' >> $@
+	echo 'interface ${WANIF}' >> $@
 	echo 'static ip_address=${WAN_IP}' >> $@
 	echo 'static routers=${WAN_GW}' >> $@
 	echo 'static domain_name_server=${WAN_DNS}' >> $@
@@ -126,7 +163,27 @@ endif
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'interface=br0' >> $@
-	$(if $(strip ${DHCP_RANGE}),echo 'dhcp-range=${DHCP_RANGE}' >> $@)
+ifdef DHCP_RANGE
+	echo 'dhcp-range=${DHCP_RANGE}' >> $@
+endif
+endif
+
+# enable wpa_supplicant, if WAN_SSID is defined
+/etc/wpa_supplicant.wpa_supplicant.conf
+	sed -i '/rasping start/,/rasping end/d' $@
+ifndef CLEAN
+ifdef WAN_SSID
+	echo "# rasping start" >> $@
+        echo "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev" >> $@
+        echo "update_config=1" >> $@
+	echo "country=${COUNTRY}" >> $@
+	echo "network={" >> $@
+	echo "    ssid=$(subst ','\'',${WAN_SSID})" >> $@
+	echo "    psk=$(subst ','\'',${WAN_PASSPHRASE})" >> $@
+	echo "    scan_ssid=1" >> $@
+	echo "    key_mgmt=WPA-PSK" >> $@
+	echo "}" >> $@
+        echo "#rasping end" >> $@
 endif
 
 # enable hostapd (if LAN_SSID defined)
@@ -149,20 +206,31 @@ ifdef LAN_SSID
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'interface=wlan0' >> $@
 	echo 'bridge=br0' >> $@
-	echo 'ssid=$(strip ${LAN_SSID})' >> $@
+	echo "ssid=$(subst ','\'',${LAN_SSID})" >> $@
+	echo 'ieee80211d=1' >> $@
+	echo 'country_code=${COUNTRY}' >> $@
+	echo 'channel=${LAN_CHANNEL}' >> $@
+ifneq ($(shell test ${LAN_CHANNEL} -gt 14 && echo yes),)
+	echo 'hw_mode=a' >> $@
+	echo 'ieee80211n=1' >> $@
+	echo 'ieee80211ac=1' >> $@
+else
 	echo 'hw_mode=g' >> $@
-	echo 'channel=$(strip ${LAN_CHANNEL})' >> $@
+	echo 'ieee80211n=1' >> $@
+endif
 	echo 'wmm_enabled=0' >> $@
 	echo 'macaddr_acl=0' >> $@
 	echo 'auth_algs=1' >> $@
 	echo 'ignore_broadcast_ssid=0' >> $@
 	echo 'wpa=2' >> $@
-	echo 'wpa_passphrase=$(strip ${LAN_PASSPHRASE})' >> $@
+	echo "wpa_passphrase=$(subst ','\'',${LAN_PASSPHRASE})" >> $@
 	echo 'wpa_key_mgmt=WPA-PSK' >> $@
 	echo 'wpa_pairwise=TKIP' >> $@
 	echo 'rsn_pairwise=CCMP' >> $@
 endif
 endif
+
+# create
 
 # show IPs etc on login screen
 /etc/issue.d/rasping.issue:
@@ -170,8 +238,8 @@ endif
 ifndef CLEAN
 	mkdir -p $(dir $@)
 	echo '\e{bold}Raspberry Pi NAT Gateway' >> $@
-	echo 'WAN MAC : '$$(cat /sys/class/net/eth0/address) >> $@
-	echo 'WAN IP  : \4{eth0}' >> $@
+	echo 'WAN MAC : '$$(cat /sys/class/net/${WANIF}/address) >> $@
+	echo 'WAN IP  : \4{${WANIF}}' >> $@
 	echo 'LAN IP  : \4{br0}' >> $@
 	echo '\e{reset}' >> $@
 endif
@@ -211,12 +279,12 @@ ifndef CLEAN
 	echo 'ConfigureWithoutCarrier=true' >> $@
 endif
 
-# tell networkd to attach everything except eth0 and br0 to the bridge
+# tell networkd to attach everything except WANIF and br0 to the bridge
 /etc/systemd/network/rasping-bridged.network: /etc/systemd/network/rasping-br0.netdev
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
-	echo 'Name=!eth0 !br0' >> $@
+	echo 'Name=!${WANIF} !br0' >> $@
 	echo >> $@
 	echo '[Network]' >> $@
 	echo 'Bridge=br0' >> $@
