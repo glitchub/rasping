@@ -115,5 +115,5 @@ To log in via text console:
     You can make changes to the config file and install them with "make",
     followed by reboot.
 
-    You can also restore the original network configuration with "make
+    You can also reve the original network configuration with "make
     uninstall", followed by reboot.

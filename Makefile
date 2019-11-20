@@ -1,16 +1,24 @@
 # Raspberry PI NAT Gateway
 
-# Make sure we're running the right code
-ifeq ($(shell [ -f /etc/rpi-issue ] && [ $$(systemd --version | awk '{print $$2;exit}') -ge 241 ] && echo yes),)
-$(error Requires Raspberry Pi with systemd version 241 or later)
-endif
-
 ifneq (${USER},root)
 # become root if not already
 default ${MAKECMDGOALS}:; sudo -E ${MAKE} ${MAKECMDGOALS}
 else
 
 SHELL=/bin/bash
+
+# Sanity checks
+ifeq ($(shell [ -f /etc/rpi-issue ] && echo yes),)
+$(error Requires Raspberry Pi)
+endif
+
+ifeq ($(shell [ $$(systemd --version | awk '{print $$2;exit}') -ge 241 ] && echo yes),)
+$(error Requires systemd version 241 or later)
+endif
+
+ifeq ($(shell systemctl status dhcpcd &>/dev/null && echo yes),)
+$(error Requires dhcpcd)
+endif
 
 include rasping.cfg
 override LAN_IP:=$(strip ${LAN_IP})
@@ -142,7 +150,7 @@ ifndef CLEAN
 	echo 'ipv4only' >> $@
 	echo 'noipv4ll' >> $@
 	echo 'noalias' >> $@
-	echo 'timeout=300' >> $@
+	echo 'timeout 300' >> $@
 ifdef WAN_IP
 	echo 'interface ${WANIF}' >> $@
 	echo 'static ip_address=${WAN_IP}' >> $@
