@@ -200,7 +200,7 @@ ifndef CLEAN
 endif
 
 # tell networkd about bridge LAN_IP address
-/etc/systemd/network/rasping-br0.network: /etc/systemd/networkrasping-br0.netdev
+/etc/systemd/network/rasping-br0.network: /etc/systemd/network/rasping-br0.netdev
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
@@ -212,7 +212,7 @@ ifndef CLEAN
 endif
 
 # tell networkd to attach everything except eth0 and br0 to the bridge
-/etc/systemd/network/rasping-bridged.network: /etc/systemd/networkrasping-br0.netdev
+/etc/systemd/network/rasping-bridged.network: /etc/systemd/network/rasping-br0.netdev
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
