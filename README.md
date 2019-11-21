@@ -1,59 +1,119 @@
 Rasping - Raspberry Pi NAT Gateway
 
-Configure a Raspberry PI 3 or equivalent as a ethernet NAT gateway.
+Configure a Raspberry Pi 3B/B+/4 as a NAT gateway, in one of three basic
+configurations:
 
-Physical configuration:
+    Wired WAN via built-in ethernet, and wired LAN via USB ethernet dongle(s)
 
-    The Pi's ethernet interface connects to the WAN. By default it expects to
-    receive an address via DHCP, but can also be configiured to use static IP.
+    Wired WAN via built-in ethernet and wireless LAN (also optional dongles)
 
-    The PI provides a LAN gateway on usb ethernet dongle, if attached, and via
-    Wifi if enabled.  The gateway has a pre-defined static IP address. By
-    default, DHCP is served to the upper-half of the LAN IP range, the lower
-    half is not assigned and available for arbitrary static IP. The LAN also
-    provides DNS.
+    Wireless WAN and wired LAN via built-in ethernet (also optional dongles)
 
-To install:
+To install, first download a current Raspian Lite image:
 
-    Download the SDcard image:
-        
-        wget https://downloads.raspberrypi.org/raspbian_lite/images/raspbian_lite-2019-06-24/2019-06-20-raspbian-buster-lite.zip
+        wget https://downloads.raspberrypi.org/raspbian_lite/images/raspbian_lite-2019-07-12/2019-07-10-raspbian-buster-lite.zip
 
-    Unzip and extract file 2019-06-20-raspbin-buster-lite.img (about 1.8GB). 
+Unzip and extract the img file, it will be about 2GB.
 
-    Copy the img file to an 8GB SDcard using dd on linux or Win32DiskImager
-    on Windows, etc.
+Optional: on a linux PC you can alter the image now so ssh will start on the
+first boot:
 
-    Insert the card into the Pi, attach monitor, keyboard, and ethernet, then
-    apply power (the ethernet must provide DHCP and internet access).
+            mkdir xxx
+            sudo mount -oloop,offset=4096K /path/to/the.img xxx
+            sudo touch xxx/ssh
+            sudo umount xxx
 
-    Wait for Pi to boot to login prompt. The default user is 'pi' with password
-    'raspberry'. Enter the following commands:
+Copy the img file to an 8GB SDcard with dd on linux/darwin or Win32DiskImager
+on Windows.
 
-        sudo systemctl enable ssh                           -- if SSH access is desired
-        
-        sudo raspi-config nonint do_configure_keyboard us   -- if you want to edit files from the Pi console (and your keyboard is 'us')
-        
-        sudo passwd pi                                      -- enter a new password 
+To log in via SSH:
 
-        sudo apt -y update                                      
+        If you did not perform the "touch x/ssh" operation above then:
 
-        sudo apt -y upgrade                                 -- this may take a while    
-        
-        sudo apt -y install git                                     
-        
-        git clone https://github.com/glitchub/rasping
+            Remove and reinstall the SDcard into the PC so it re-reads the
+            partition table.
 
-        sudo reboot                                             
-   
-    Wait for reboot, then log back in (with the new password) and perform:
+        Windows should mount the boot partition automatically, on Linux you may
+        need to mount it manually, it's the first partition i.e.  /dev/sdb1 or
+        /dev/mmcblk0p1, etc). The correct directory will contain about 20 files
+        including config.txt.
 
-        nano rasping/rasping.cfg                            -- edit the configuration as desired
+            Create an empty file named "ssh" in the boot partition.
 
-        make -C rasping                                     -- wait for "INSTALL COMPLETE"
+            Unmount the partition before removing the SD card from the PC.
+
+        Insert the SD card into the Pi, attach it to local ethernet, then apply
+        power.
+
+    On the PC, run the python script "sscan" (included in this repo) to list
+    all open ssh ports on the local subnet. The Pi will appear as something
+    like:
+
+            192.168.1.144 : SSH-2.0-OpenSSH_7.9p1 Raspbian-10
+
+        It will take a minute or so for the Pi to boot, just run sscan repeatedly
+        until it shows up.
+
+        Once the IP address has been detected, you can "ssh pi@ip.ad.re.ss" on your
+        PC and log in with password "raspberry".
+
+    Be aware that the magic "ssh" file will only work once. If the Pi resets
+    for some reason before you"ve reached the "systemctl enable ssh" step below
+    then you'll need to re-create the file.
+
+To log in via text console:
+
+        Insert the SD card into the Pi, attach HDMI monitor, keyboard and ethernet,
+        then apply power.
+
+        When the login prompt appears, log in as "pi" with password "raspberry".
+
+    The default keyboard mapping is for UK keyboards. If you have a different
+    layout you may have trouble editing files. Enter the command:
+
+            sudo raspi-config nonint do_configure_board US
+
+        Where US" is your desired ISO-3116 country code, see
+        https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
+
+    Now that you're logged in, enter the following commands:
+
+        sudo systemctl enable ssh        -- permanently enable ssh
+
+        passwd                           -- set a new password
+
+        sudo apt update                  -- download latest package metadata
+
+        sudo apt -y upgrade              -- download and install updated packages, this will take a few minutes
 
         sudo reboot
 
-The system will boot into the network gateway mode automatically. If you didn't
-enable wifi in the Makefile then you'll need to attach a usb ethernet dongle
-and attach to that.         
+    Log back into the Pi with your new password and enter the following:
+
+        sudo apt -y install git
+
+        git clone https://github.com/glitchub/rasping
+
+    At this point the Pi will have a "rasping" directory containing this repo.
+    The file "rasping.cfg" defines all configurable parameters, and provides a
+    detailed description of each.
+
+        cd rasping
+
+        nano rasping.cfg                -- edit the configuration as desired
+
+        make
+
+    The make process will install packages, rewrite system files, and perform a
+    bunch if systemctl operations. When it's done you'll see "INSTALL COMPLETE".
+
+    Reboot the Pi and it will come up in NAT gateway mode automatically.
+
+    You'll be able to ssh to the Pi from any LAN device (to the LAN_IP
+    address), and also from the WAN if you UNBLOCKed port 22.
+
+    You can make changes to the config file and install them with "make",
+    followed by reboot.
+
+    You can also reve the original network configuration with "make
+    uninstall", followed by reboot.
