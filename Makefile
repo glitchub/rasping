@@ -128,7 +128,7 @@ ifndef CLEAN
 	iptables -A INPUT ! -i ${WANIF} -j ACCEPT
 	iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
 ifdef PINGABLE
-	iptables -A INPUT -p icmp --icmp-type echo-request -J ACCEPT
+	iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT
 endif
 	iptables -t nat -A POSTROUTING -o ${WANIF} -j MASQUERADE
 ifdef UNBLOCK
