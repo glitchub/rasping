@@ -25,6 +25,7 @@ override LAN_IP:=$(strip ${LAN_IP})
 override DHCP_RANGE:=$(strip ${DHCP_RANGE})
 override UNBLOCK:=$(strip ${UNBLOCK})
 override FORWARD:=$(strip ${FORWARD})
+override VISIBLE:=$(strip ${VISIBLE})
 override WAN_IP:=$(strip ${WAN_IP})
 override WAN_GW:=$(strip ${WAN_GW})
 override WAN_DNS:=$(strip ${WAN_DNS})
@@ -126,6 +127,9 @@ ifndef CLEAN
 	iptables -P INPUT DROP
 	iptables -A INPUT ! -i ${WANIF} -j ACCEPT
 	iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+ifdef PINGABLE
+	iptables -A INPUT -p icmp --icmp-type echo-request -J ACCEPT
+endif
 	iptables -t nat -A POSTROUTING -o ${WANIF} -j MASQUERADE
 ifdef UNBLOCK
 	for p in ${UNBLOCK}; do iptables -A INPUT -p tcp --dport $$p -j ACCEPT; done
