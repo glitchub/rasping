@@ -30,6 +30,7 @@ override WAN_IP:=$(strip ${WAN_IP})
 override WAN_GW:=$(strip ${WAN_GW})
 override WAN_DNS:=$(strip ${WAN_DNS})
 override LAN_CHANNEL:=$(strip ${LAN_CHANNEL})
+override COUNTRY:=$(strip ${COUNTRY})
 
 # escape ' -> '\'' in ssid's and passphrases
 override WAN_SSID:=$(subst ','\'',$(strip ${WAN_SSID}))
