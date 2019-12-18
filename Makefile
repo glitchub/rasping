@@ -285,6 +285,7 @@ ifndef CLEAN
 	echo '[Network]' >> $@
 	echo 'Address=${LAN_IP}/24' >> $@
 	echo 'ConfigureWithoutCarrier=true' >> $@
+	echo 'IgnoreCarrierLoss=true' >> $@
 endif
 
 # tell networkd to attach everything except WANIF and br0 to the bridge
