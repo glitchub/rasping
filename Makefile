@@ -42,6 +42,9 @@ override LAN_PASSPHRASE:=$(subst ','\'',$(strip ${LAN_PASSPHRASE}))
 ifndef LAN_IP
   $(error Must specify LAN_IP)
 endif
+ifeq (${LAN_IP},no)
+overrider LAN_IP=
+endif
 
 ifdef WAN_SSID
 ifdef LAN_SSID
@@ -131,7 +134,9 @@ ifndef CLEAN
 ifdef PINGABLE
 	iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT
 endif
+ifdef LAN_IP
 	iptables -t nat -A POSTROUTING -o ${WANIF} -j MASQUERADE
+endif
 ifdef UNBLOCK
 	for p in ${UNBLOCK}; do iptables -A INPUT -p tcp --dport $$p -j ACCEPT; done
 endif
@@ -145,19 +150,27 @@ endif
 	iptables-save -f $@
 endif
 
-# append dhcpcd.conf to set WANIF address, static if WAN_IP is defined
+# append dhcpcd.conf to set WANIF (or br0) address, and static if WAN_IP is defined
 /etc/dhcpcd.conf:
 	sed -i '/rasping start/,/rasping end/d' $@
 ifndef CLEAN
 	echo '# rasping start' >> $@
 	echo '# Raspberry Pi NAT Gateway' >> $@
+ifdef LAN_IP
 	echo 'allowinterfaces ${WANIF}' >> $@
+else
+	echo 'allowinterfaces br0' >> $@
+endif
 	echo 'ipv4only' >> $@
 	echo 'noipv4ll' >> $@
 	echo 'noalias' >> $@
 	echo 'timeout 300' >> $@
 ifdef WAN_IP
+ifdef LAN_IP
 	echo 'interface ${WANIF}' >> $@
+else
+	echo 'interface br0' >> $@
+endif
 	echo 'static ip_address=${WAN_IP}' >> $@
 	echo 'static routers=${WAN_GW}' >> $@
 	echo 'static domain_name_server=${WAN_DNS}' >> $@
@@ -170,10 +183,12 @@ endif
 /etc/dnsmasq.d/rasping.conf:
 	rm -f $@
 ifndef CLEAN
+ifdef LAN_IP
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'interface=br0' >> $@
 ifdef DHCP_RANGE
 	echo 'dhcp-range=${DHCP_RANGE}' >> $@
+endif
 endif
 endif
 
@@ -247,8 +262,12 @@ ifndef CLEAN
 	mkdir -p $(dir $@)
 	echo '\e{bold}Raspberry Pi NAT Gateway' >> $@
 	echo 'WAN MAC : '$$(cat /sys/class/net/${WANIF}/address) >> $@
+ifdef LAN_IP
 	echo 'WAN IP  : \4{${WANIF}}' >> $@
 	echo 'LAN IP  : \4{br0}' >> $@
+else
+	echo 'WAN IP  : \4{br0}' >> $@
+endif
 	echo '\e{reset}' >> $@
 endif
 
@@ -278,6 +297,7 @@ endif
 # tell networkd about bridge LAN_IP address
 /etc/systemd/network/rasping-br0.network: /etc/systemd/network/rasping-br0.netdev
 ifndef CLEAN
+ifdef LAN_IP
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
 	echo 'Name=br0' >> $@
@@ -287,13 +307,18 @@ ifndef CLEAN
 	echo 'ConfigureWithoutCarrier=true' >> $@
 	echo 'IgnoreCarrierLoss=true' >> $@
 endif
+endif
 
 # tell networkd to attach everything except WANIF and br0 to the bridge
 /etc/systemd/network/rasping-bridged.network: /etc/systemd/network/rasping-br0.netdev
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
+ifdef LAN_IP
 	echo 'Name=!${WANIF} !br0' >> $@
+else
+	echo 'Name=!br0' >> $@
+endif
 	echo >> $@
 	echo '[Network]' >> $@
 	echo 'Bridge=br0' >> $@
