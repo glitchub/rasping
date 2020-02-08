@@ -129,7 +129,11 @@ endif
 	iptables -F -tnat
 ifndef CLEAN
 	iptables -P INPUT DROP
+ifdef LAN_IP
 	iptables -A INPUT ! -i ${WANIF} -j ACCEPT
+else
+	iptables -A INPUT -i lo -j ACCEPT
+endif
 	iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
 ifdef PINGABLE
 	iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT
@@ -150,7 +154,7 @@ endif
 	iptables-save -f $@
 endif
 
-# append dhcpcd.conf to set WANIF (or br0) address, and static if WAN_IP is defined
+# append dhcpcd.conf to set WANIF (or br0) address, or static if WAN_IP is defined
 /etc/dhcpcd.conf:
 	sed -i '/rasping start/,/rasping end/d' $@
 ifndef CLEAN
