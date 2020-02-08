@@ -9,15 +9,15 @@ SHELL=/bin/bash
 
 # Sanity checks
 ifeq ($(shell [ -f /etc/rpi-issue ] && echo yes),)
-$(error Requires Raspberry Pi)
+	$(error Requires Raspberry Pi)
 endif
 
 ifeq ($(shell [ $$(systemd --version | awk '{print $$2;exit}') -ge 241 ] && echo yes),)
-$(error Requires systemd version 241 or later)
+	$(error Requires systemd version 241 or later)
 endif
 
 ifeq ($(shell systemctl status dhcpcd &>/dev/null && echo yes),)
-$(error Requires dhcpcd)
+	$(error Requires dhcpcd)
 endif
 
 include rasping.cfg
@@ -40,10 +40,17 @@ override LAN_PASSPHRASE:=$(subst ','\'',$(strip ${LAN_PASSPHRASE}))
 # ' <- fix vi syntax highlight
 
 ifndef LAN_IP
-  $(error Must specify LAN_IP)
+	$(error Must specify LAN_IP)
 endif
+
 ifeq (${LAN_IP},no)
-overrider LAN_IP=
+ifdef DHCP_RANGE
+	$(error Can't set DHCP_RANGE when LAN_IP=no)
+endif
+ifdef FORWARD
+	$(error Can't set FORWARD when LAN_IP=no)
+endif
+	override LAN_IP:=
 endif
 
 ifdef WAN_SSID
@@ -56,9 +63,9 @@ endif
 ifndef WAN_PASSPHRASE
 	$(error Must set WAN_PASSPHRASE with WAN_SSID)
 endif
-WANIF=wlan0
+	WANIF=wlan0
 else
-WANIF=eth0
+	WANIF=eth0
 endif
 
 ifdef LAN_SSID
@@ -138,18 +145,18 @@ endif
 ifdef PINGABLE
 	iptables -A INPUT -p icmp --icmp-type echo-request -j ACCEPT
 endif
-ifdef LAN_IP
-	iptables -t nat -A POSTROUTING -o ${WANIF} -j MASQUERADE
-endif
 ifdef UNBLOCK
 	for p in ${UNBLOCK}; do iptables -A INPUT -p tcp --dport $$p -j ACCEPT; done
 endif
+ifdef LAN_IP
+	iptables -t nat -A POSTROUTING -o ${WANIF} -j MASQUERADE
 ifdef FORWARD
 	# forward incoming and localhost
 	for p in ${FORWARD}; do \
 		iptables -t nat -A PREROUTING -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
 		iptables -t nat -A OUTPUT -o lo -p tcp --dport $${p%=*} -j DNAT --to $${p#*=}; \
 	done
+endif
 endif
 	iptables-save -f $@
 endif
