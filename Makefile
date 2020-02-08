@@ -9,15 +9,15 @@ SHELL=/bin/bash
 
 # Sanity checks
 ifeq ($(shell [ -f /etc/rpi-issue ] && echo yes),)
-	$(error Requires Raspberry Pi)
+    $(error Requires Raspberry Pi)
 endif
 
 ifeq ($(shell [ $$(systemd --version | awk '{print $$2;exit}') -ge 241 ] && echo yes),)
-	$(error Requires systemd version 241 or later)
+    $(error Requires systemd version 241 or later)
 endif
 
 ifeq ($(shell systemctl status dhcpcd &>/dev/null && echo yes),)
-	$(error Requires dhcpcd)
+    $(error Requires dhcpcd)
 endif
 
 include rasping.cfg
@@ -40,43 +40,46 @@ override LAN_PASSPHRASE:=$(subst ','\'',$(strip ${LAN_PASSPHRASE}))
 # ' <- fix vi syntax highlight
 
 ifndef LAN_IP
-	$(error Must specify LAN_IP)
+    $(error Must specify LAN_IP)
 endif
 
 ifeq (${LAN_IP},no)
 ifdef DHCP_RANGE
-	$(error Can't set DHCP_RANGE when LAN_IP=no)
+    $(error Can't set DHCP_RANGE when LAN_IP=no)
 endif
 ifdef FORWARD
-	$(error Can't set FORWARD when LAN_IP=no)
+    $(error Can't set FORWARD when LAN_IP=no)
 endif
-	override LAN_IP:=
+ifdef WAN_SSID
+    $(error Can't set WAN_SSID when LAN_IP=no)
+endif
+    override LAN_IP:=
 endif
 
 ifdef WAN_SSID
 ifdef LAN_SSID
-	$(error Can't set WAN_SSID with LAN_SSID)
+    $(error Can't set WAN_SSID with LAN_SSID)
 endif
 ifndef COUNTRY
-	$(error Must specifiy COUNTRY with WAN_SSID)
+    $(error Must specifiy COUNTRY with WAN_SSID)
 endif
 ifndef WAN_PASSPHRASE
-	$(error Must set WAN_PASSPHRASE with WAN_SSID)
+    $(error Must set WAN_PASSPHRASE with WAN_SSID)
 endif
-	WANIF=wlan0
+    WANIF=wlan0
 else
-	WANIF=eth0
+    WANIF=eth0
 endif
 
 ifdef LAN_SSID
 ifndef COUNTRY
-	$(error Must specifiy COUNTRY with LAN_SSID)
+    $(error Must specifiy COUNTRY with LAN_SSID)
 endif
 ifndef LAN_PASSPHRASE
-	$(error Must set LAN_PASSPHRASE with LAN_SSID)
+    $(error Must set LAN_PASSPHRASE with LAN_SSID)
 endif
 ifndef LAN_CHANNEL
-	$(error Must set LAN_CHANNEL with LAN_SSID)
+    $(error Must set LAN_CHANNEL with LAN_SSID)
 endif
 endif
 
@@ -161,7 +164,7 @@ endif
 	iptables-save -f $@
 endif
 
-# append dhcpcd.conf to set WANIF (or br0) address, or static if WAN_IP is defined
+# append dhcpcd.conf to set WANIF (or br0) address, static if WAN_IP is defined
 /etc/dhcpcd.conf:
 	sed -i '/rasping start/,/rasping end/d' $@
 ifndef CLEAN
@@ -272,12 +275,12 @@ endif
 ifndef CLEAN
 	mkdir -p $(dir $@)
 	echo '\e{bold}Raspberry Pi NAT Gateway' >> $@
-	echo 'WAN MAC : '$$(cat /sys/class/net/${WANIF}/address) >> $@
 ifdef LAN_IP
+	echo 'WAN MAC : '$$(cat /sys/class/net/${WANIF}/address) >> $@
 	echo 'WAN IP  : \4{${WANIF}}' >> $@
 	echo 'LAN IP  : \4{br0}' >> $@
 else
-	echo 'WAN IP  : \4{br0}' >> $@
+	echo 'IP: \4{br0}' >> $@
 endif
 	echo '\e{reset}' >> $@
 endif
