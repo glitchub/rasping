@@ -31,6 +31,15 @@ def netlist(network):
             for i in xrange(1,(1<<shift)-1):
                 yield "%d.%d.%d.%d" % struct.unpack('BBBB',struct.pack(">I",base+i))
 
+def expand(a):
+    ip,_,nm = a.partition('/')
+    n=len(ip.split('.'))
+    assert 1 <= n <= 4
+    if (n == 4): return "%s/%s" % (ip, nm or "32")
+    if (n == 3): return "%s.0/%s" % (ip, nm or "24")
+    if (n == 2): return "%s.0.0/%s" % (ip, nm or "16")
+    return "%s.0.0.0/%s" % (ip, nm or "8")
+
 # Return a list of local IPv4 networks
 def localnets():
     allow=["10.","192.168."]+["172.%d."%n for n in range(16,32)]
@@ -67,7 +76,7 @@ def localnets():
     raise Exception("Can't find local IPv4 networks, please specify the command line")
 
 if len(sys.argv) > 1:
-    networks=sys.argv[1:]
+    networks=list(expand(i) for i in sys.argv[1:])
 else:
     networks=localnets()
 

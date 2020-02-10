@@ -7,17 +7,8 @@ else
 
 SHELL=/bin/bash
 
-# Sanity checks
-ifeq ($(shell [ -f /etc/rpi-issue ] && echo yes),)
-    $(error Requires Raspberry Pi)
-endif
-
-ifeq ($(shell [ $$(systemd --version | awk '{print $$2;exit}') -ge 241 ] && echo yes),)
-    $(error Requires systemd version 241 or later)
-endif
-
-ifeq ($(shell systemctl status dhcpcd &>/dev/null && echo yes),)
-    $(error Requires dhcpcd)
+ifeq ($(shell grep Raspbian.*buster /etc/os-release),)
+    $(error Requires raspbian version 10)
 endif
 
 include rasping.cfg

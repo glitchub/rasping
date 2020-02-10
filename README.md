@@ -9,9 +9,9 @@ configurations:
 
     Wireless WAN and wired LAN via built-in ethernet (also optional dongles)
 
-To install, first download a current Raspian Lite image:
+To install, first download a current Raspian Lite image, must be version 10 aka "buster":
 
-    wget https://downloads.raspberrypi.org/raspbian_lite/images/raspbian_lite-2019-07-12/2019-07-10-raspbian-buster-lite.zip
+    wget https://downloads.raspberrypi.org/raspbian_lite/images/raspbian_lite-2020-02-07/2020-02-05-raspbian-buster-lite.zip
 
 Unzip and extract the img file, it will be about 2GB.
 
