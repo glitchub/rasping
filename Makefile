@@ -321,7 +321,7 @@ endif
 
 # interfaces to be bridge and/or vlan'd
 MATCH = !lo !br0 !wlan0
-ifdef LANIP
+ifdef LAN_IP
 MATCH += !${WANIF}
 endif
 
