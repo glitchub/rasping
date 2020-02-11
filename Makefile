@@ -374,7 +374,8 @@ ifdef LAN_VLAN
         echo >> $@
         echo '[Network]' >> $@
         echo 'Bridge=br0' >> $@
-
+endif
+endif
 
 # Create a vlan version of all matching devices
 /etc/systemd/network/rasping-attach-if-to-vlan0.network:
