@@ -320,10 +320,10 @@ ifdef LAN_IP
 endif
 endif
 
-# interfaces to be bridge and/or vlan'd
-MATCH = !lo !br0 !wlan0
+# interfaces to be bridge and/or vlan'd (leading ! inverts the list)
+MATCH = ! lo br0 wlan0
 ifdef LAN_IP
-MATCH += !${WANIF}
+MATCH += ${WANIF}
 endif
 
 # Define vlan device if enabled
