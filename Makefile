@@ -292,7 +292,7 @@ ifndef CLEAN
 	echo 'net.ipv4.tcp_syncookies=1' >> $@
 endif
 
-// target to purge all systemd-networkd files before creating new
+# target to purge all systemd-networkd files before creating new
 .PHONY: networkd-clean
 networkd-clean:; rm -f /etc/systemd/network/rasping*
 
@@ -321,13 +321,12 @@ endif
 endif
 
 # interfaces to be bridge and/or vland
-MATCH = !lo !bro
+MATCH = !lo !br0
 ifndef LAN_SSID
 MATCH += !wlan0
 endif
 ifdef LANIP
 MATCH += !${WANIF}
-endif
 endif
 
 # Define vlan device if enabled
@@ -350,7 +349,7 @@ ifndef CLEAN
 ifdef LAN_VLAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
-	echo 'Name=${MATCH}'
+	echo 'Name=${MATCH}' >> $@
 	echo >> $@
 	echo '[Network]' >> $@
 	echo 'VLAN=vlan0' >> $@
@@ -364,7 +363,7 @@ ifndef CLEAN
 	echo '[Match]' >> $@
 	echo 'Name=${MATCH}' >> $@
 	echo >> $@
-	echo '[network]' >> $@
+	echo '[Network]' >> $@
 	echo 'bridge=br0' >> $@
 endif
 
