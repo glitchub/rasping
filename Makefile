@@ -302,7 +302,7 @@ NETWORKD_FILES += /etc/systemd/network/rasping-define-vlan0.netdev          # de
 NETWORKD_FILES += /etc/systemd/network/rasping-attach-vlan0-to-br0.network  # attach vlan0* to br0
 NETWORKD_FILES += /etc/systemd/network/rasping-attach-if-to-vlan0.network   # attach arbitrary interfaces to the vlan
 
-.PHONY networkd networkd-clean ${NETWORKD_FILES}
+.PHONY: networkd networkd-clean ${NETWORKD_FILES}
 
 networkd-clean:; rm -f /etc/systemd/network/rasping*
 
@@ -369,11 +369,11 @@ endif
 ifndef CLEAN
 ifdef LAN_VLAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
-        echo '[Match]' >> $@
-        echo 'Name=vlan0' >> $@
-        echo >> $@
-        echo '[Network]' >> $@
-        echo 'Bridge=br0' >> $@
+	echo '[Match]' >> $@
+	echo 'Name=vlan0' >> $@
+	echo >> $@
+	echo '[Network]' >> $@
+	echo 'Bridge=br0' >> $@
 endif
 endif
 
