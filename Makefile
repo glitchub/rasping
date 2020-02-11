@@ -13,6 +13,7 @@ endif
 
 include rasping.cfg
 override LAN_IP:=$(strip ${LAN_IP})
+override LAN_VLAN:=$(strip ${LAN_VLAN})
 override DHCP_RANGE:=$(strip ${DHCP_RANGE})
 override UNBLOCK:=$(strip ${UNBLOCK})
 override FORWARD:=$(strip ${FORWARD})
@@ -89,6 +90,8 @@ FILES += /etc/sysctl.d/rasping.conf
 FILES += /etc/systemd/network/rasping-br0.netdev
 FILES += /etc/systemd/network/rasping-br0.network
 FILES += /etc/systemd/network/rasping-bridged.network
+FILES += /etc/systemd/network/rasping-vlan0.netdev
+FILES += /etc/systemd/network/rasping-vlan0.network
 
 # recreate everything
 .PHONY: install PACKAGES ${FILES}
@@ -289,9 +292,12 @@ ifndef CLEAN
 	echo 'net.ipv4.tcp_syncookies=1' >> $@
 endif
 
+// target to purge all systemd-networkd files before creating new
+.PHONY: networkd-clean
+networkd-clean:; rm -f /etc/systemd/network/rasping*
+
 # tell networkd to create a bridge device, this goes before the others
-/etc/systemd/network/rasping-br0.netdev:
-	rm -f /etc/systemd/network/rasping* # nuke residuals
+/etc/systemd/network/rasping-br0.netdev: networkd-clean
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[NetDev]' >> $@
@@ -300,7 +306,7 @@ ifndef CLEAN
 endif
 
 # tell networkd about bridge LAN_IP address
-/etc/systemd/network/rasping-br0.network: /etc/systemd/network/rasping-br0.netdev
+/etc/systemd/network/rasping-br0.network: networkd-clean
 ifndef CLEAN
 ifdef LAN_IP
 	echo '# Raspberry Pi NAT Gateway' >> $@
@@ -314,19 +320,52 @@ ifdef LAN_IP
 endif
 endif
 
+# interfaces to be bridge and/or vland
+MATCH = !lo !bro
+ifndef LAN_SSID
+MATCH += !wlan0
+endif
+ifdef LANIP
+MATCH += !${WANIF}
+endif
+endif
+
+# Define vlan device if enabled
+/etc/systemd/network/rasping-vlan0.netdev: networkd-clean
+ifndef CLEAN
+ifdef LAN_VLAN
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo '[NetDev]' >> $@
+	echo 'Name=vlan0'
+	echo 'Kind=vlan'
+	echo >> $@
+	echo '[VLAN]' >> $@
+	echo 'Id=100' >> $@
+endif
+endif
+
+# Create a vlan version of all matching devices
+/etc/systemd/network/rasping-vlan0.network: networkd-clean
+ifndef CLEAN
+ifdef LAN_VLAN
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo '[Match]' >> $@
+	echo 'Name=${MATCH}'
+	echo >> $@
+	echo '[Network]' >> $@
+	echo 'VLAN=vlan0' >> $@
+endif
+endif
+
 # tell networkd to attach everything except WANIF and br0 to the bridge
-/etc/systemd/network/rasping-bridged.network: /etc/systemd/network/rasping-br0.netdev
+/etc/systemd/network/rasping-bridged.network: networkd-clean
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
-ifdef LAN_IP
-	echo 'Name=!${WANIF} !br0' >> $@
-else
-	echo 'Name=!br0' >> $@
-endif
+	echo 'Name=${MATCH}' >> $@
 	echo >> $@
-	echo '[Network]' >> $@
-	echo 'Bridge=br0' >> $@
+	echo '[network]' >> $@
+	echo 'bridge=br0' >> $@
 endif
 
 .PHONY: clean uninstall
