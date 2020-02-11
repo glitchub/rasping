@@ -312,6 +312,7 @@ ifdef LAN_IP
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
 	echo 'Name=br0' >> $@
+	echo >> $@
 	echo '[Network]' >> $@
 	echo 'Address=${LAN_IP}/24' >> $@
 	echo 'ConfigureWithoutCarrier=true' >> $@
@@ -333,6 +334,7 @@ ifdef LAN_VLAN
 	echo '[NetDev]' >> $@
 	echo 'Name=vlan0' >> $@
 	echo 'Kind=vlan' >> $@
+	echo  >> $@
 	echo '[VLAN]' >> $@
 	echo 'Id=100' >> $@
 endif
@@ -345,6 +347,7 @@ ifdef LAN_VLAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
 	echo 'Name=${MATCH}' >> $@
+	echo >> $@
 	echo '[Network]' >> $@
 	echo 'VLAN=vlan0' >> $@
 endif
@@ -356,6 +359,7 @@ ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
 	echo 'Name=${MATCH}' >> $@
+	echo >> $@
 	echo '[Network]' >> $@
 	echo 'Bridge=br0' >> $@
 endif
