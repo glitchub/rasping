@@ -319,11 +319,8 @@ ifdef LAN_IP
 endif
 endif
 
-# interfaces to be bridge and/or vland
-MATCH = !lo !br0
-ifndef LAN_SSID
-MATCH += !wlan0
-endif
+# interfaces to be bridge and/or vlan'd
+MATCH = !lo !br0 !wlan0
 ifdef LANIP
 MATCH += !${WANIF}
 endif
@@ -360,7 +357,7 @@ ifndef CLEAN
 	echo '[Match]' >> $@
 	echo 'Name=${MATCH}' >> $@
 	echo '[Network]' >> $@
-	echo 'bridge=br0' >> $@
+	echo 'Bridge=br0' >> $@
 endif
 
 .PHONY: clean uninstall
