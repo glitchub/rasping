@@ -323,7 +323,7 @@ ifdef LAN_VLAN
 	echo 'Kind=vlan' >> $@
 	echo  >> $@
 	echo '[VLAN]' >> $@
-        echo 'Id=100' >> $@
+	echo 'Id=100' >> $@
 endif
 endif
 
