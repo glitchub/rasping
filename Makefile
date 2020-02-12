@@ -350,6 +350,7 @@ ifdef LAN_IP
 endif
 endif
 
+# we only support vlan on eth0 or eth1. Sorry if your dongle uses usb0.
 /etc/systemd/network/rasping-03-attach-vlan0.network:
 ifdef INSTALL
 ifdef LAN_VLAN
