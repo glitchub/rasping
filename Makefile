@@ -89,9 +89,9 @@ FILES += /etc/issue.d/rasping.issue
 FILES += /etc/sysctl.d/rasping.conf
 
 # recreate everything
-.PHONY: install PACKAGES ${FILES} networkd
+.PHONY: install PACKAGES ${FILES} NETWORKD
 
-install: PACKAGES ${FILES}
+install: PACKAGES ${FILES} NETWORKD
 ifndef CLEAN
 	systemctl enable systemd-networkd
 ifdef WAN_SSID
@@ -109,12 +109,12 @@ endif
 	@echo 'INSTALL COMPLETE'
 
 # Install packages before files
-${FILES}: PACKAGES
+${FILES} NETWORKD: PACKAGES
 PACKAGES:
 	DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
 else #ifndef CLEAN
 # Delete files before packages
-PACKAGES: ${FILES}
+PACKAGES: ${FILES} NETWORKD
 ifeq (${CLEAN},2)
 	DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y ${PACKAGES}
 endif
@@ -290,19 +290,19 @@ endif
 # Networkd stuffd
 
 NETWORKD_FILES =  /etc/systemd/network/rasping-00-define-br0.netdev           # defines the bridge device
-NETWORKD_FILES += /etc/systemd/network/rasping-01-config-br0.network          # configure bridge IP address
-NETWORKD_FILES += /etc/systemd/network/rasping-02-define-vlan0.netdev         # define vlan0 device
+NETWORKD_FILES += /etc/systemd/network/rasping-01-define-vlan0.netdev         # define vlan0 device
+NETWORKD_FILES += /etc/systemd/network/rasping-02-config-br0.network          # configure bridge IP address
 NETWORKD_FILES += /etc/systemd/network/rasping-03-attach-vlan0.network        # attach eth1 to vlan0
 NETWORKD_FILES += /etc/systemd/network/rasping-04-attach-br0.network          # attach all interfaces to the bridge
 
-.PHONY: networkd networkd-clean ${NETWORKD_FILES}
+.PHONY: networkd-clean ${NETWORKD_FILES}
 
 # purge old files before creating new
 networkd-clean:; rm -f /etc/systemd/network/rasping*
 
 ${NETWORKD_FILES}: networkd-clean
 
-networkd: ${NETWORKD_FILES}
+NETWORKD: ${NETWORKD_FILES}
 
 # Define bridge device
 /etc/systemd/network/rasping-00-define-br0.netdev:
@@ -313,8 +313,22 @@ ifndef CLEAN
 	echo 'Kind=bridge' >> $@
 endif
 
+# Define vlan device if enabled
+/etc/systemd/network/rasping-01-define-vlan0.netdev:
+ifndef CLEAN
+ifdef LAN_VLAN
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo '[NetDev]' >> $@
+	echo 'Name=vlan0' >> $@
+	echo 'Kind=vlan' >> $@
+	echo  >> $@
+	echo '[VLAN]' >> $@
+	echo 'Id=${LAN_VLAN}' >> $@
+endif
+endif
+
 # Configure the bridge.
-/etc/systemd/network/rasping-01-config-br0.network:
+/etc/systemd/network/rasping-02-config-br0.network:
 ifndef CLEAN
 ifdef LAN_IP
 	echo '# Raspberry Pi NAT Gateway' >> $@
@@ -328,26 +342,15 @@ ifdef LAN_IP
 endif
 endif
 
-# Define vlan device if enabled
-/etc/systemd/network/rasping-02-define-vlan0.netdev:
-ifndef CLEAN
-ifdef LAN_VLAN
-	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo '[NetDev]' >> $@
-	echo 'Name=vlan0' >> $@
-	echo 'Kind=vlan' >> $@
-	echo  >> $@
-	echo '[VLAN]' >> $@
-	echo 'Id=${LAN_VLAN}' >> $@
-endif
-endif
-
 /etc/systemd/network/rasping-03-attach-vlan0.network:
 ifndef CLEAN
 ifdef LAN_VLAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
-	echo 'Name=eth1' >> $@
+	echo 'Name=eth* usb*' $@
+ifdef LAN_IP
+	echo 'Name=! ${WANIF}' >> $@
+endif
 	echo >> $@
 	echo '[Network]' >> $@
 	echo 'VLAN=vlan0' >> $@
@@ -359,11 +362,9 @@ endif
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
+	echo 'Name=! lo wlan0' >> $@
 ifdef LAN_IP
-	echo 'Name=!lo br0 wlan0 ${WANIF}' >> $@
-else
-	echo 'Name=!lo br0 wlan0' >> $@
-endif
+	echo 'Name=! ${WANIF}' >> $@
 endif
 	echo >> $@
 	echo '[Network]' >> $@
