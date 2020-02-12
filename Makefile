@@ -287,13 +287,13 @@ ifndef CLEAN
 	echo 'net.ipv4.tcp_syncookies=1' >> $@
 endif
 
-# Networkd stuffd
-
-NETWORKD_FILES =  /etc/systemd/network/rasping-00-define-br0.netdev           # defines the bridge device
-NETWORKD_FILES += /etc/systemd/network/rasping-01-define-vlan0.netdev         # define vlan0 device
+# Networkd stuff. Note lexical order matters, parsing for an interface stops at
+# the first matching .network file
+NETWORKD_FILES =  /etc/systemd/network/rasping-00-define-br0.netdev           # define the bridge device
+NETWORKD_FILES += /etc/systemd/network/rasping-01-define-vlan0.netdev         # define the vlan0 device
 NETWORKD_FILES += /etc/systemd/network/rasping-02-config-br0.network          # configure bridge IP address
-NETWORKD_FILES += /etc/systemd/network/rasping-03-attach-vlan0.network        # attach eth1 to vlan0
-NETWORKD_FILES += /etc/systemd/network/rasping-04-attach-br0.network          # attach all interfaces to the bridge
+NETWORKD_FILES += /etc/systemd/network/rasping-03-attach-vlan0.network        # attach eth* and usb* interfaces to vlan0
+NETWORKD_FILES += /etc/systemd/network/rasping-04-attach-br0.network          # attach interfaces the bridge
 
 .PHONY: networkd-clean ${NETWORKD_FILES}
 
