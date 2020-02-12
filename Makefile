@@ -92,7 +92,6 @@ FILES += /etc/issue.d/rasping.issue
 FILES += /etc/sysctl.d/rasping.conf
 
 .PHONY: FILES NETWORKD
-default: FILES NETWORKD
 
 ifndef INSTALL
 # clean/uninstalling, take system down first
