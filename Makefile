@@ -290,10 +290,10 @@ endif
 # Networkd stuffd
 
 NETWORKD_FILES =  /etc/systemd/network/rasping-00-define-br0.netdev           # defines the bridge device
-NETWORKD_FILES += /etc/systemd/network/rasping-01-define-vlan0.netdev         # define the vlan0 device
-NETWORKD_FILES += /etc/systemd/network/rasping-02-config-br0.network          # configure bridge IP address
-NETWORKD_FILES += /etc/systemd/network/rasping-03-attach-if-to-vlan0.network  # create vlan for ethX devices
-NETWORKD_FILES += /etc/systemd/network/rasping-04-attach-if-to-br0.network    # attach interfaces to the bridge
+NETWORKD_FILES += /etc/systemd/network/rasping-01-config-br0.network          # configure bridge IP address
+NETWORKD_FILES += /etc/systemd/network/rasping-02-define-vlan0.netdev         # define vlan0 device
+NETWORKD_FILES += /etc/systemd/network/rasping-03-attach-vlan0.network        # attach eth1 to vlan0
+NETWORKD_FILES += /etc/systemd/network/rasping-04-attach-br0.network          # attach all interfaces to the bridge
 
 .PHONY: networkd networkd-clean ${NETWORKD_FILES}
 
@@ -313,22 +313,8 @@ ifndef CLEAN
 	echo 'Kind=bridge' >> $@
 endif
 
-# Define vlan device if enabled
-/etc/systemd/network/rasping-01-define-vlan0.netdev:
-ifndef CLEAN
-ifdef LAN_VLAN
-	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo '[NetDev]' >> $@
-	echo 'Name=vlan0' >> $@
-	echo 'Kind=vlan' >> $@
-	echo  >> $@
-	echo '[VLAN]' >> $@
-	echo 'Id=100' >> $@
-endif
-endif
-
 # Configure the bridge.
-/etc/systemd/network/rasping-02-config-br0.network:
+/etc/systemd/network/rasping-01-config-br0.network:
 ifndef CLEAN
 ifdef LAN_IP
 	echo '# Raspberry Pi NAT Gateway' >> $@
@@ -342,30 +328,37 @@ ifdef LAN_IP
 endif
 endif
 
-# Create vlan versions of network devices
-/etc/systemd/network/rasping-03-attach-if-to-vlan0.network:
+# Define vlan device if enabled
+/etc/systemd/network/rasping-02-define-vlan0.netdev:
 ifndef CLEAN
 ifdef LAN_VLAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo '[Match]' >> $@
-ifdef WAN_SSID
-	echo 'Name=!lo br0 wlan0 ${WANIF}' >> $@
-else
-	echo 'Name=eth[1-9] usb*' >> $@
-endif
-	echo >> $@
-	echo '[Network]' >> $@
-	echo 'VLAN=vlan0' >> $@
+	echo '[NetDev]' >> $@
+	echo 'Name=vlan0' >> $@
+	echo 'Kind=vlan' >> $@
+	echo  >> $@
+	echo '[VLAN]' >> $@
+	echo 'Id=${LAN_VLAN}' >> $@
 endif
 endif
 
-/etc/systemd/network/rasping-04-attach-if-to-br0.network:
+/etc/systemd/network/rasping-03-attach-vlan0.network:
+ifndef CLEAN
+ifdef LAN_VLAN
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo '[Match]' >> $@
+	echo 'Name=eth1' >> $@
+	echo >> $@
+	echo '[Network]' >> $@
+	echo 'VLAN=vlan0' >> $@
+	echo 'ConfigureWithoutCarrier=true' >> $@
+	echo 'IgnoreCarrierLoss=true' >> $@
+endif
+endif
+/etc/systemd/network/rasping-04-attach-br0.network:
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
-ifdef LAN_VLAN
-	echo 'Name=vlan0*' >> $@
-else
 ifdef LAN_IP
 	echo 'Name=!lo br0 wlan0 ${WANIF}' >> $@
 else
@@ -375,6 +368,8 @@ endif
 	echo >> $@
 	echo '[Network]' >> $@
 	echo 'Bridge=br0' >> $@
+	echo 'ConfigureWithoutCarrier=true' >> $@
+	echo 'IgnoreCarrierLoss=true' >> $@
 endif
 
 
