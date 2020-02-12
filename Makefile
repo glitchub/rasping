@@ -356,8 +356,11 @@ ifdef INSTALL
 ifdef LAN_VLAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
-	echo 'Name=! lo wlan0 br0' >> $@
-	echo 'Name=! ${WANIF}' >> $@
+ifdef WAN_SSID
+	echo 'Name=eth0' >> $@
+else
+	echo 'Name=eth1' >> $@
+fi
 	echo '[Network]' >> $@
 	echo 'VLAN=vlan0' >> $@
 	echo 'ConfigureWithoutCarrier=true' >> $@
