@@ -5,6 +5,9 @@ ifneq (${USER},root)
 default ${MAKECMDGOALS}:; sudo -E ${MAKE} ${MAKECMDGOALS}
 else
 
+# this is undefined by the clean and uninstall targets
+INSTALL=1
+
 SHELL=/bin/bash
 
 ifeq ($(shell grep Raspbian.*buster /etc/os-release),)
@@ -75,8 +78,8 @@ ifndef LAN_CHANNEL
 endif
 endif
 
-# package to install
-PACKAGES=iptables-persistent dnsmasq $(if ${LAN_SSID},hostapd)
+# packages to install
+PACKAGES=iptables-persistent dnsmasq hostapd
 
 # files to generate or alter
 FILES = /etc/iptables/rules.v4
@@ -88,11 +91,23 @@ FILES += /etc/dnsmasq.d/rasping.conf
 FILES += /etc/issue.d/rasping.issue
 FILES += /etc/sysctl.d/rasping.conf
 
-# recreate everything
-.PHONY: install PACKAGES ${FILES} NETWORKD
+.PHONY: FILES NETWORKD
+default: FILES NETWORKD
 
-install: PACKAGES ${FILES} NETWORKD
-ifndef CLEAN
+ifndef INSTALL
+# clean/uninstalling, take system down first
+FILES NETWORKD: DOWN
+.PHONY: DOWN
+DOWN:
+	systemctl disable systemd-networkd || true
+	systemctl disable wpa_supplicant || true
+	systemctl disable hostapd || true
+	systemctl mask hostapd || true
+	systemctl disable dnsmasq || true
+else
+# installing, bring system up after
+.PHONY: UP
+UP: FILES NETWORKD
 	systemctl enable systemd-networkd
 ifdef WAN_SSID
 	systemctl enable wpa_supplicant
@@ -106,19 +121,17 @@ else
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
 endif
+	systemctl enable dnsmasq
 	@echo 'INSTALL COMPLETE'
 
 # Install packages before files
-${FILES} NETWORKD: PACKAGES
-PACKAGES:
-	DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
-else #ifndef CLEAN
-# Delete files before packages
-PACKAGES: ${FILES} NETWORKD
-ifeq (${CLEAN},2)
-	DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y ${PACKAGES}
+FILES NETWORKD: packages
+.PHONY: packages
+packages:;DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
 endif
-endif
+
+.PHONY: ${FILES}
+FILES: ${FILES}
 
 # configure NAT, block everything on the WAN except as defined by UNBLOCK or FORWARD
 /etc/iptables/rules.v4:
@@ -126,7 +139,7 @@ endif
 	iptables -F
 	iptables -P INPUT ACCEPT
 	iptables -F -tnat
-ifndef CLEAN
+ifdef INSTALL
 	iptables -P INPUT DROP
 ifdef LAN_IP
 	iptables -A INPUT ! -i ${WANIF} -j ACCEPT
@@ -156,7 +169,7 @@ endif
 # append dhcpcd.conf to set WANIF (or br0) address, static if WAN_IP is defined
 /etc/dhcpcd.conf:
 	sed -i '/rasping start/,/rasping end/d' $@
-ifndef CLEAN
+ifdef INSTALL
 	echo '# rasping start' >> $@
 	echo '# Raspberry Pi NAT Gateway' >> $@
 ifdef LAN_IP
@@ -185,7 +198,7 @@ endif
 # configure dnsmasq to serve on br0
 /etc/dnsmasq.d/rasping.conf:
 	rm -f $@
-ifndef CLEAN
+ifdef INSTALL
 ifdef LAN_IP
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'interface=br0' >> $@
@@ -198,7 +211,7 @@ endif
 # enable wpa_supplicant, if WAN_SSID is defined
 /etc/wpa_supplicant.wpa_supplicant.conf:
 	! [ -e $@ ] || sed -i '/rasping start/,/rasping end/d' $@
-ifndef CLEAN
+ifdef INSTALL
 ifdef WAN_SSID
 	echo '# rasping start' >> $@
 	echo 'ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev' >> $@
@@ -217,7 +230,7 @@ endif
 # enable hostapd (if LAN_SSID defined)
 /etc/default/hostapd:
 	! [ -e $@ ] || sed -i '/rasping start/,/rasping end/d' $@
-ifndef CLEAN
+ifdef INSTALL
 ifdef LAN_SSID
 	echo '# rasping start' >> $@
 	echo '# Raspberry Pi NAT Gateway' >> $@
@@ -229,7 +242,7 @@ endif
 # create hostapd config (if LAN_SSID is defined)
 /etc/hostapd/rasping.conf:
 	rm -f $@
-ifndef CLEAN
+ifdef INSTALL
 ifdef LAN_SSID
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'interface=wlan0' >> $@
@@ -261,7 +274,7 @@ endif
 # show IPs etc on login screen
 /etc/issue.d/rasping.issue:
 	rm -f /etc/issue.d/rasping* # nuke residuals
-ifndef CLEAN
+ifdef INSTALL
 	mkdir -p $(dir $@)
 	echo '\e{bold}Raspberry Pi NAT Gateway' >> $@
 ifdef LAN_IP
@@ -277,7 +290,7 @@ endif
 # kernel configuration
 /etc/sysctl.d/rasping.conf:
 	rm -f $@
-ifndef CLEAN
+ifdef INSTALL
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'net.ipv6.conf.all.disable_ipv6=1' >> $@
 	echo 'net.ipv4.ip_forward=1' >> $@
@@ -289,24 +302,22 @@ endif
 
 # Networkd stuff. Note lexical order matters, parsing for an interface stops at
 # the first matching .network file
-NETWORKD_FILES =  /etc/systemd/network/rasping-00-define-br0.netdev           # define the bridge device
-NETWORKD_FILES += /etc/systemd/network/rasping-01-define-vlan0.netdev         # define the vlan0 device
-NETWORKD_FILES += /etc/systemd/network/rasping-02-config-br0.network          # configure bridge IP address
-NETWORKD_FILES += /etc/systemd/network/rasping-03-attach-vlan0.network        # attach eth* and usb* interfaces to vlan0
-NETWORKD_FILES += /etc/systemd/network/rasping-04-attach-br0.network          # attach interfaces the bridge
+NETWORKD =  /etc/systemd/network/rasping-00-define-br0.netdev           # define the bridge device
+NETWORKD += /etc/systemd/network/rasping-01-define-vlan0.netdev         # define the vlan0 device
+NETWORKD += /etc/systemd/network/rasping-02-config-br0.network          # configure bridge IP address
+NETWORKD += /etc/systemd/network/rasping-03-attach-vlan0.network        # attach eth* and usb* interfaces to vlan0
+NETWORKD += /etc/systemd/network/rasping-04-attach-br0.network          # attach interfaces the bridge
 
-.PHONY: networkd-clean ${NETWORKD_FILES}
+.PHONY: ${NETWORKD} nclean
+NETWORKD: ${NETWORKD}
 
 # purge old files before creating new
-networkd-clean:; rm -f /etc/systemd/network/rasping*
-
-${NETWORKD_FILES}: networkd-clean
-
-NETWORKD: ${NETWORKD_FILES}
+${NETWORKD}: nclean
+nclean:; rm -f /etc/systemd/network/rasping*
 
 # Define bridge device
 /etc/systemd/network/rasping-00-define-br0.netdev:
-ifndef CLEAN
+ifdef INSTALL
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[NetDev]' >> $@
 	echo 'Name=br0' >> $@
@@ -315,7 +326,7 @@ endif
 
 # Define vlan device if enabled
 /etc/systemd/network/rasping-01-define-vlan0.netdev:
-ifndef CLEAN
+ifdef INSTALL
 ifdef LAN_VLAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[NetDev]' >> $@
@@ -328,7 +339,7 @@ endif
 
 # Configure the bridge.
 /etc/systemd/network/rasping-02-config-br0.network:
-ifndef CLEAN
+ifdef INSTALL
 ifdef LAN_IP
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
@@ -341,14 +352,12 @@ endif
 endif
 
 /etc/systemd/network/rasping-03-attach-vlan0.network:
-ifndef CLEAN
+ifdef INSTALL
 ifdef LAN_VLAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
-	echo 'Name=eth* usb*' >> $@
-ifdef LAN_IP
+	echo 'Name=! lo wlan0 br0' >> $@
 	echo 'Name=! ${WANIF}' >> $@
-endif
 	echo '[Network]' >> $@
 	echo 'VLAN=vlan0' >> $@
 	echo 'ConfigureWithoutCarrier=true' >> $@
@@ -356,7 +365,7 @@ endif
 endif
 endif
 /etc/systemd/network/rasping-04-attach-br0.network:
-ifndef CLEAN
+ifdef INSTALL
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
 	echo 'Name=! lo wlan0' >> $@
@@ -372,11 +381,12 @@ endif
 
 .PHONY: clean uninstall
 clean:
-	${MAKE} CLEAN=1
+	${MAKE} INSTALL=
 	@echo 'CLEAN COMPLETE'
 
 uninstall:
-	${MAKE} CLEAN=2
+	${MAKE} INSTALL=
+	DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y ${PACKAGES}
 	@echo 'UNINSTALL COMPLETE'
 
 endif
