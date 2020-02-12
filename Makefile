@@ -360,7 +360,7 @@ ifdef WAN_SSID
 	echo 'Name=eth0' >> $@
 else
 	echo 'Name=eth1' >> $@
-fi
+endif
 	echo '[Network]' >> $@
 	echo 'VLAN=vlan0' >> $@
 	echo 'ConfigureWithoutCarrier=true' >> $@
