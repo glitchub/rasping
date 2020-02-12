@@ -352,7 +352,7 @@ ifdef WAN_SSID
 	echo 'Name=!lo br0 wlan0 ${WANIF}' >> $@
 else
 	echo 'Name=eth[1-9] usb*' >> $@
-fi
+endif
 	echo >> $@
 	echo '[Network]' >> $@
 	echo 'VLAN=vlan0' >> $@
@@ -363,12 +363,14 @@ endif
 ifndef CLEAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
-if LAN_VLAN
+ifdef LAN_VLAN
 	echo 'Name=vlan0*' >> $@
-elif LAN_IP
+else
+ifdef LAN_IP
 	echo 'Name=!lo br0 wlan0 ${WANIF}' >> $@
 else
 	echo 'Name=!lo br0 wlan0' >> $@
+endif
 endif
 	echo >> $@
 	echo '[Network]' >> $@
