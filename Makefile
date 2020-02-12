@@ -321,7 +321,6 @@ ifdef LAN_VLAN
 	echo '[NetDev]' >> $@
 	echo 'Name=vlan0' >> $@
 	echo 'Kind=vlan' >> $@
-	echo  >> $@
 	echo '[VLAN]' >> $@
 	echo 'Id=${LAN_VLAN}' >> $@
 endif
@@ -334,7 +333,6 @@ ifdef LAN_IP
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
 	echo 'Name=br0' >> $@
-	echo >> $@
 	echo '[Network]' >> $@
 	echo 'Address=${LAN_IP}/24' >> $@
 	echo 'ConfigureWithoutCarrier=true' >> $@
@@ -347,11 +345,10 @@ ifndef CLEAN
 ifdef LAN_VLAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Match]' >> $@
-	echo 'Name=eth* usb*' $@
+	echo 'Name=eth* usb*' >> $@
 ifdef LAN_IP
 	echo 'Name=! ${WANIF}' >> $@
 endif
-	echo >> $@
 	echo '[Network]' >> $@
 	echo 'VLAN=vlan0' >> $@
 	echo 'ConfigureWithoutCarrier=true' >> $@
@@ -366,7 +363,6 @@ ifndef CLEAN
 ifdef LAN_IP
 	echo 'Name=! ${WANIF}' >> $@
 endif
-	echo >> $@
 	echo '[Network]' >> $@
 	echo 'Bridge=br0' >> $@
 	echo 'ConfigureWithoutCarrier=true' >> $@
