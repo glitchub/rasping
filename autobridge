@@ -68,7 +68,7 @@ while True:
     sleep(1)
     for i in set(interfaces()) - set(os.listdir('/sys/class/net/%s/brif' % bridge)):
         if matches(i, include) and not matches(i, exclude):
-            print("Adding %s" % i)
+            print("Adding %s to %s" % (i, bridge))
             if ip("link set dev %s master %s" % (i, bridge)):
-                print("Add failed, ignoring %S" % i)
+                print("Could not add %s, ignoring it" % i)
                 exclude.add(i)
