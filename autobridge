@@ -29,7 +29,7 @@ exclude={'lo', bridge}
 include=set()
 
 for pattern in sys.argv[1:-1]:
-    if pattern.startswith("!"):
+    if pattern.startswith("~"):
         if not pattern[1:]: raise Exception("Invalid pattern %s" % pattern)
         exclude.add(pattern[1:])
     else: include.add(pattern)
@@ -58,6 +58,8 @@ else:
 
 # make sure the bridge is up
 ip("link set %s up" % bridge)
+
+print("Now looking for interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
 
 # spin forever looking for new interfaces to add to the bridge
 while True:
