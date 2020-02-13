@@ -56,7 +56,7 @@ while True:
         if matches(i, include) and not matches(i, exclude):
             v="vlan.%s" % i
             if v not in interfaces():
-                print("Creating vlan %s with id %d" % v, vlanid)
+                print("Creating vlan %s with id %d" % (v, vlanid))
                 if ip("link add link %s name %s type vlan id %d" % (i, v, vlanid)):
                     print("Could not create %s, ignoring %s" % (v, i))
                     exclude.add(i)
