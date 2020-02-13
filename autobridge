@@ -5,57 +5,60 @@ from fnmatch import fnmatch
 from time import sleep
 import subprocess
 
-if len(sys.argv) < 2:
+if len(sys.argv) < 3:
     print("""
 Usage:
 
-    autobridge [-v vlan-id] [-x pattern] pattern [... pattern] bridge
+    autobridge [!]pattern [... [!]pattern] bridge
 
 Given one or more glob-style network interface name patterns and a bridge name,
-add matching interfaces to the bridge as they appear.
+add matching interfaces to the bridge as they appear. If the pattern starts with
+"!" then matching interfaces will always be ignored.
 
-Options:
+The bridge will be created if it doesn't already exist.
 
-    -v vlan-id - all bridged devices will be assigned the specfied vlan-id, which
-    must be a number from 1 to 4094.
-
-    -x pattern - interfaces that match the pattern will be ignored. Can be
-    specified multiple times. "-xlo" is implicitly defined.
 """, file=sys.stderr)
     quit()
 
-exclude=set()
-include=set()
-vlan=None
+# return set of known interfaces
+def interfaces(): return set(os.listdir('/sys/class/net'))
 
-# return true if string s matches any of list globs
+# given bridge name, return set of bridged interfaces
+def bridged(bridge): return set(os.listdir('/sys/class/net/%s/brif' % bridge))
+
+# execute the 'ip' command with given command line
+def ip(cmd): subprocess.call(["sudo", "ip"] + cmd.split())
+
+# return true if string s matches any listed glob
 def matches(s, globs):
     for g in globs:
         if fnmatch(g, s):
             return True
     return False
 
-opts, args = getopt(sys.argv[1:],"v:x:")
-for opt, arg in opts:
-    if   opt == "-v":
-        vlan = int(arg)
-        assert(1 <= vlan <= 4094)
-    elif opt == "-x":
-        exclude.add(arg)
-    else:
-        raise Exception("Invalid option '%s'" % opt)
+bridge = sys.argv[-1]
 
-include.update(args[:-1])
-bridge = args[-1]
-exclude.update([bridge,'lo'])
+exclude={'lo', bridge}
+include=set()
 
-print("Bridge:%s include:%s exclude:%s" % (bridge, str(include), str(exclude)))
+for pattern in sys.argv[1:-1]:
+    if pattern == "!": raise Exception("Invalid pattern %s" % pattern);
+    if pattern.startswith("!"): exclude.add(pattern[1:])
+    else: include.add(patten)
+
+if not len(include): raise Exception("Must specify at least one include pattern")
+
+if not bridge in interfaces(): ip("link add name %s type bridge" % bridge)
+ip("link set %s up" % bridge)
+
+try:
+    bridged(bridge)
+except FileNotFoundError:
+    raise Exception("%s is not a bridge" % bridge)
 
 while True:
-    ifs = set(os.listdir('/sys/class/net'))                       # all interfaces
-    brifs = set(os.listdir('/sys/class/net/%s/brif' % bridge))    # bridged interfaces
-    for i in ifs - brifs:
+    for i in interfaces-bridged(bridge):
         if matches(i, include) and not matches(i, exclude):
-            print("Adding %s to %s..." % i, bridge)
-            subprocess.call(("ip link set dev %s master %s" % (i, bridge)).split())
+            print("Bridging %s" % i)
+            ip("link set dev %s master %s" % (i, bridge))
     sleep(1)
