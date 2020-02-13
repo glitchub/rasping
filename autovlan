@@ -1,0 +1,63 @@
+#!/usr/bin/python3
+import os, sys
+from getopt import getopt
+from fnmatch import fnmatch
+from time import sleep
+import subprocess
+
+if len(sys.argv) < 3:
+    print("""
+Usage:
+
+    autovlan [~]pattern [... [~]pattern] vlanid
+
+Given one or more glob-style network interface name patterns and a vlan id 1 to
+4094, create a vlan for each matching interface.
+
+Negative patterns start with "~" and matching interfaces will always be
+ignored.
+
+""", file=sys.stderr)
+    quit()
+
+# parse command line params
+vlanid = int(sys.argv[-1])
+assert 1 <= vlanid <= 4094
+
+exclude={'lo','vlan*'}
+include=set()
+
+for pattern in sys.argv[1:-1]:
+    if pattern.startswith("~"):
+        if not pattern[1:]: raise Exception("Invalid pattern %s" % pattern)
+        exclude.add(pattern[1:])
+    else: include.add(pattern)
+
+if not len(include): include.add('*')
+
+# return list of network interfaces
+def interfaces(): return os.listdir('/sys/class/net')
+
+# execute the 'ip' command with given command line
+def ip(cmd): return subprocess.call(["sudo", "ip"] + cmd.split())
+
+# return true if string s matches any listed glob
+def matches(s, globs):
+    for g in globs:
+        if fnmatch(s, g):
+            return True
+    return False
+
+print("Waiting for interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
+
+# spin forever looking for new interfaces to add to the bridge
+while True:
+    sleep(1)
+    for i in set(interfaces()) - set(os.listdir('/sys/class/net/%s/brif' % bridge)):
+        if matches(i, include) and not matches(i, exclude):
+            v="vlan.%s" % i
+            if v not in interfaces:
+                print("Creating vlan %s with id %d" % v, vlanid)
+                if ip("link add link %s name %s type vlan id %d" % (i, v, vlanid)):
+                print("Could not create %s, ignoring %s" % (v, i))
+                exclude.add(i)
