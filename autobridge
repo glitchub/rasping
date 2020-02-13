@@ -40,7 +40,7 @@ if not len(include): include.add('*')
 def interfaces(): return os.listdir('/sys/class/net')
 
 # execute the 'ip' command with given command line
-def ip(cmd): subprocess.call(["sudo", "ip"] + cmd.split())
+def ip(cmd): return subprocess.call(["sudo", "ip"] + cmd.split())
 
 # return true if string s matches any listed glob
 def matches(s, globs):
@@ -51,9 +51,11 @@ def matches(s, globs):
 
 if not bridge in interfaces():
     print("Creating bridge %s" % bridge)
-    ip("link add name %s type bridge" % bridge)
+    if ip("link add name %s type bridge" % bridge):
+        raise Exception("Failed to create bridge %s" % bridge)
 else:
-    if not os.path.isdir("/sys/class/net/%s/brif" % bridge): raise Exception("%s is not a bridge" % bridge)
+    if not os.path.isdir("/sys/class/net/%s/brif" % bridge):
+        raise Exception("%s is not a bridge" % bridge)
     print("Using bridge %s" % bridge)
 
 # make sure the bridge is up
@@ -66,5 +68,11 @@ while True:
     sleep(1)
     for i in set(interfaces()) - set(os.listdir('/sys/class/net/%s/brif' % bridge)):
         if matches(i, include) and not matches(i, exclude):
-            print("Adding %s to bridge %s" % (i, bridge))
-            ip("link set dev %s master %s" % (i, bridge))
+            if os.path.isdir("/sys/class/net/%s/master" % i):
+                print("%s is already bridged, ignoring it")
+                exclude.add(i)
+            else:
+                print("Adding %s to bridge %s" % (i, bridge))
+                if ip("link set dev %s master %s" % (i, bridge)):
+                    print("Could not add %s, ignoring it")
+                    exclude.add(i)
