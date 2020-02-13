@@ -12,19 +12,28 @@ Usage:
     autobridge [!]pattern [... [!]pattern] bridge
 
 Given one or more glob-style network interface name patterns and a bridge name,
-add matching interfaces to the bridge as they appear. If the pattern starts with
-"!" then matching interfaces will always be ignored.
+create the bridge if necessary and add matching interfaces to it as they
+appear.
 
-The bridge will be created if it doesn't already exist.
+Negative patterns start with "!", matching interfaces will always be ignored.
 
 """, file=sys.stderr)
     quit()
 
-# return set of known interfaces
-def interfaces(): return set(os.listdir('/sys/class/net'))
+# parse command line params
+bridge = sys.argv[-1]
+exclude={'lo', bridge}
+include=set()
 
-# given bridge name, return set of bridged interfaces
-def bridged(bridge): return set(os.listdir('/sys/class/net/%s/brif' % bridge))
+for pattern in sys.argv[1:-1]:
+    if pattern.startswith("!"):
+        if not pattern[1:]: raise Exception("Invalid pattern %s" % pattern)
+        exclude.add(pattern[1:])
+    else: include.add(patten)
+if not len(include): raise Exception("Must specify at least one pattern without '!'")
+
+# return list of network interfaces
+def interfaces(): return os.listdir('/sys/class/net')
 
 # execute the 'ip' command with given command line
 def ip(cmd): subprocess.call(["sudo", "ip"] + cmd.split())
@@ -32,33 +41,25 @@ def ip(cmd): subprocess.call(["sudo", "ip"] + cmd.split())
 # return true if string s matches any listed glob
 def matches(s, globs):
     for g in globs:
-        if fnmatch(g, s):
+        if fnmatch(s, g):
             return True
     return False
 
-bridge = sys.argv[-1]
+if not bridge in interfaces():
+    print("Creating bridge %s\n" % bridge)
+    ip("link add name %s type bridge" % bridge)
+else:
+    if not os.path.isdir('/sys/class/net/%s/brif'):
+        raise Exception("%s is not a bridge" % bridge)
+    print("Using existing bridge %s\n" % bridge)
 
-exclude={'lo', bridge}
-include=set()
-
-for pattern in sys.argv[1:-1]:
-    if pattern == "!": raise Exception("Invalid pattern %s" % pattern);
-    if pattern.startswith("!"): exclude.add(pattern[1:])
-    else: include.add(patten)
-
-if not len(include): raise Exception("Must specify at least one include pattern")
-
-if not bridge in interfaces(): ip("link add name %s type bridge" % bridge)
+# make sure the bridge is up
 ip("link set %s up" % bridge)
 
-try:
-    bridged(bridge)
-except FileNotFoundError:
-    raise Exception("%s is not a bridge" % bridge)
-
+# spin forever looking for new interfaces to add to the bridge
 while True:
-    for i in interfaces-bridged(bridge):
-        if matches(i, include) and not matches(i, exclude):
-            print("Bridging %s" % i)
-            ip("link set dev %s master %s" % (i, bridge))
     sleep(1)
+    for i in set(interfaces()) - set(os.listdir('/sys/class/net/%s/brif' % bridge)):
+        if matches(i, include) and not matches(i, exclude):
+            print("Adding %s to bridge %s" % (i, bridge))
+            ip("link set dev %s master %s" % (i, bridge))
