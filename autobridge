@@ -9,13 +9,16 @@ if len(sys.argv) < 3:
     print("""
 Usage:
 
-    autobridge [!]pattern [... [!]pattern] bridge
+    autobridge [~]pattern [... [~]pattern] bridge
 
 Given one or more glob-style network interface name patterns and a bridge name,
 create the bridge if necessary and add matching interfaces to it as they
 appear.
 
-Negative patterns start with "!", matching interfaces will always be ignored.
+Negative patterns start with "~" and matching interfaces will always be
+ignored.
+
+At least one positive pattern must be specified.
 
 """, file=sys.stderr)
     quit()
@@ -29,8 +32,8 @@ for pattern in sys.argv[1:-1]:
     if pattern.startswith("!"):
         if not pattern[1:]: raise Exception("Invalid pattern %s" % pattern)
         exclude.add(pattern[1:])
-    else: include.add(patten)
-if not len(include): raise Exception("Must specify at least one pattern without '!'")
+    else: include.add(pattern)
+if not len(include): raise Exception("Must specify at least one positive pattern.")
 
 # return list of network interfaces
 def interfaces(): return os.listdir('/sys/class/net')
