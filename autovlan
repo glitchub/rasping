@@ -23,6 +23,7 @@ ignored.
 # parse command line params
 vlanid = int(sys.argv[-1])
 assert 1 <= vlanid <= 4094
+print("Using vlan tag %d" % vlanid);
 
 exclude={'lo','vlan*'}
 include=set()
@@ -49,15 +50,13 @@ def matches(s, globs):
     return False
 
 print("Waiting for interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
-
-# spin forever looking for new interfaces to add to the bridge
 while True:
     sleep(1)
-    for i in set(interfaces()) - set(os.listdir('/sys/class/net/%s/brif' % bridge)):
+    for i in interfaces():
         if matches(i, include) and not matches(i, exclude):
             v="vlan.%s" % i
-            if v not in interfaces:
+            if v not in interfaces():
                 print("Creating vlan %s with id %d" % v, vlanid)
                 if ip("link add link %s name %s type vlan id %d" % (i, v, vlanid)):
-                print("Could not create %s, ignoring %s" % (v, i))
-                exclude.add(i)
+                    print("Could not create %s, ignoring %s" % (v, i))
+                    exclude.add(i)
