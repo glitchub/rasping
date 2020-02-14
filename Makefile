@@ -93,28 +93,33 @@ FILES += /etc/sysctl.d/rasping.conf
 FILES += /lib/systemd/system/rasping_autobridge.service
 FILES += /lib/systemd/system/rasping_autovlan.service
 
-# legacy cruft to always clean up
-.PHONY: legacy
-legacy:
-	rm -f /etc/systemd/network/rasping*
-	systemctl disable systemd-networkd || true
-
-.PHONY: files
-
+# NO RULES ABOVE THIS POINT
+#
 ifndef INSTALL
-# clean/uninstalling, take system down first
-files: down legacy
-.PHONY: down
-down:
+# cleaning
+.PHONY: default files down
+default: files              # remove files
+
+files: down                 # take system down firsts
+
+down: legacy
 	systemctl disable wpa_supplicant || true
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
 	systemctl disable dnsmasq || true
 	systemctl disable rasping_autobridge || true
+
 else
-# installing, bring system up after
-.PHONY: up
-up: files
+# installing
+.PHONY: default up files packages
+default: up                 # bring system up
+
+files: packages             # install packages before files
+
+packages: legacy            # purge legacy before packages
+	DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
+
+up: files                   # install files before up
 ifdef WAN_SSID
 	systemctl enable wpa_supplicant
 else
@@ -131,11 +136,12 @@ endif
 	systemctl enable rasping_autobridge
 	@echo 'INSTALL COMPLETE'
 
-# Install packages before files
-files: packages legacy
-.PHONY: packages
-packages:; DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
 endif
+
+.PHONY: legacy
+legacy:
+	rm -f /etc/systemd/network/rasping*
+	systemctl disable systemd-networkd || true
 
 .PHONY: ${FILES}
 files: ${FILES}
