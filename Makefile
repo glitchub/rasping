@@ -78,7 +78,13 @@ ifndef LAN_CHANNEL
 endif
 endif
 
-# packages to install
+# legacy cruft to always clean up
+.PHONY: legacy
+legacy:
+	rm -f /etc/systemd/network/rasping*
+	systemctl disable systemd-netword
+
+        # packages to install
 PACKAGES=iptables-persistent dnsmasq hostapd
 
 # files to generate or alter
@@ -91,6 +97,7 @@ FILES += /etc/dnsmasq.d/rasping.conf
 FILES += /etc/issue.d/rasping.issue
 FILES += /etc/sysctl.d/rasping.conf
 FILES += /lib/systemd/system/rasping_autobridge.service
+FILES += /lib/systemd/system/rasping_autovlan.service
 
 .PHONY: files
 
@@ -98,9 +105,7 @@ ifndef INSTALL
 # clean/uninstalling, take system down first
 files: down
 .PHONY: down
-down:
-        rm -f /systemd/network/rasping*             # legacy cruft
-	systemctl disable systemd-networkd || true  # legacy cruft
+down: legacy
 	systemctl disable wpa_supplicant || true
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
@@ -131,7 +136,7 @@ endif
 # Install packages before files
 files: packages
 .PHONY: packages
-packages:;DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
+packages: legacy; DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
 endif
 
 .PHONY: ${FILES}
@@ -304,21 +309,44 @@ ifdef INSTALL
 	echo 'net.ipv4.tcp_syncookies=1' >> $@
 endif
 
+
+# determine which interfaces to bridge (or not bridge) based on configuration
+ifdef LAN_IP
+ifdef LAN_VLAN
+    bridgeable = vlan.*             # router with vlan
+else
+    bridgable = ~${WANIF} ~wlan0    # router, no vlan
+endif
+else
+ifdef LAN_VLAN
+    bridgable = ${WANIF} vlan.*     # bridge with vlan
+else
+    bridgable = ~wlan0              # bridge, no vlan
+endif
+endif
+
 /lib/systemd/system/rasping_autobridge.service:
 	rm -f $@
 ifdef INSTALL
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autobridge service' >> $@
 	echo '[Service]' >> $@
-ifdef LAN_IP
-	echo 'ExecStart=/home/pi/rasping/autobridge ~${WANIF} ~wlan0 br0' >> $@
-else
-	echo 'ExecStart=/home/pi/rasping/autobridge ~wlan0 br0' >> $@
-endif
+	echo 'ExecStart=/home/pi/rasping/autobridge ${bridgable} br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 endif
 
+/lib/systemd/system/rasping_autobridge.service:
+	rm -f $@
+ifdef INSTALL
+ifdef LAN_VLAN
+	echo '[Unit]' >> $@
+	echo 'Description=Raspberry Pi NAT Gateway autovlan service' >> $@
+	echo '[Service]' >> $@
+	echo 'ExecStart=/home/pi/rasping/autovlan ~${WANIF} ~wlan0 ${LAN_VLAN}' >> $@ # never vlan the WAN interface
+        echo '[Install]' >> $@
+	echo 'WantedBy=multi-user.target' >> $@
+endif
 .PHONY: clean uninstall
 clean:
 	${MAKE} INSTALL=

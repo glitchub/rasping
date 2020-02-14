@@ -1,7 +1,6 @@
 #!/usr/bin/python3 -u
 
 import os, sys
-from getopt import getopt
 from fnmatch import fnmatch
 from time import sleep
 import subprocess
