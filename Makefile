@@ -97,7 +97,7 @@ FILES += /lib/systemd/system/rasping_autovlan.service
 .PHONY: legacy
 legacy:
 	rm -f /etc/systemd/network/rasping*
-	systemctl disable systemd-netword
+	systemctl disable systemd-networkd || true
 
 .PHONY: files
 
