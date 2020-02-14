@@ -130,7 +130,11 @@ endif
 	systemctl enable dnsmasq
         systemctl enable networking
 	systemctl enable rasping_autobridge
-	systemctl enable rasping_autovlane
+ifdef LAN_VLAN
+	systemctl enable rasping_autovlan
+else
+	systemctl disable rasping_autovlan
+endif
 	@echo 'INSTALL COMPLETE'
 
 ${FILES}: packages          # install packages before files
@@ -140,6 +144,7 @@ packages: legacy            # purge legacy before packages
 
 endif
 
+# expunge legacy stuff
 .PHONY: legacy
 legacy:
 	rm -f /etc/systemd/network/rasping*
@@ -178,7 +183,7 @@ endif
 	iptables-save -f $@
 endif
 
-# Use dhcpcd.conf to configure WANIF (or br0), possibly static
+# Configure WANIF (or br0) via dhcp or static IP
 /etc/dhcpcd.conf:
 	sed -i '/rasping start/,/rasping end/d' $@
 ifdef INSTALL
@@ -207,7 +212,7 @@ endif
 	echo '# rasping end' >> $@
 endif
 
-# configure bridge static IP
+# Configure bridge with static IP
 /etc/network/interfaces.d/rasping:
 	rm -f $@
 ifdef INSTALL
@@ -219,7 +224,7 @@ ifdef LAN_IP
 endif
 endif
 
-# configure dnsmasq to serve on br0
+# Configure dnsmasq to serve on br0
 /etc/dnsmasq.d/rasping.conf:
 	rm -f $@
 ifdef INSTALL
@@ -232,7 +237,7 @@ endif
 endif
 endif
 
-# enable wpa_supplicant, if WAN_SSID is defined
+# Enable wpa_supplicant, if WAN_SSID is defined
 /etc/wpa_supplicant.wpa_supplicant.conf:
 	! [ -e $@ ] || sed -i '/rasping start/,/rasping end/d' $@
 ifdef INSTALL
@@ -252,7 +257,7 @@ ifdef WAN_SSID
 endif
 endif
 
-# enable hostapd (if LAN_SSID defined)
+# Enable hostapd if LAN_SSID defined
 /etc/default/hostapd:
 	! [ -e $@ ] || sed -i '/rasping start/,/rasping end/d' $@
 ifdef INSTALL
@@ -264,7 +269,7 @@ ifdef LAN_SSID
 endif
 endif
 
-# create hostapd config (if LAN_SSID is defined)
+# Configure hostapd if LAN_SSID defined
 /etc/hostapd/rasping.conf:
 	rm -f $@
 ifdef INSTALL
@@ -312,7 +317,7 @@ endif
 	echo '\e{reset}' >> $@
 endif
 
-# kernel configuration
+# Various kernel config
 /etc/sysctl.d/rasping.conf:
 	rm -f $@
 ifdef INSTALL
@@ -326,7 +331,7 @@ ifdef INSTALL
 endif
 
 
-# determine which interfaces to bridge (or not bridge) based on configuration
+# Determine which interfaces to bridge (or not bridge) based on configuration
 ifdef LAN_IP
 ifdef LAN_VLAN
     bridgeable = vlan.*             # router mode, with vlan
@@ -341,6 +346,7 @@ else
 endif
 endif
 
+# Enable autobridge of bridgable interfaces
 /lib/systemd/system/rasping_autobridge.service:
 	rm -f $@
 ifdef INSTALL
@@ -353,9 +359,11 @@ ifdef INSTALL
 	echo 'WantedBy=multi-user.target' >> $@
 endif
 
+# Enable autovlan
 /lib/systemd/system/rasping_autovlan.service:
 	rm -f $@
 ifdef INSTALL
+ifdef LAN_VLAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autovlan service' >> $@
@@ -364,6 +372,8 @@ ifdef INSTALL
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 endif
+endif
+
 .PHONY: clean uninstall
 clean:
 	${MAKE} INSTALL=
