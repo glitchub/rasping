@@ -310,7 +310,11 @@ ifdef INSTALL
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autobridge service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=/home/pi/rasping/autobridge ~${WAN_IF} ~wlan0 br0' >> $@
+ifdef LAN_IP
+	echo 'ExecStart=/home/pi/rasping/autobridge ~${WANIF} ~wlan0 br0' >> $@
+else
+	echo 'ExecStart=/home/pi/rasping/autobridge ~wlan0 br0' >> $@
+endif
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 endif
