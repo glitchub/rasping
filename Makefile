@@ -90,24 +90,28 @@ FILES += /etc/dhcpcd.conf
 FILES += /etc/dnsmasq.d/rasping.conf
 FILES += /etc/issue.d/rasping.issue
 FILES += /etc/sysctl.d/rasping.conf
+FILES += /etc/systemd/system/rasping_autobridge.service
 
-.PHONY: FILES NETWORKD
+.PHONY: files
 
 ifndef INSTALL
 # clean/uninstalling, take system down first
-FILES NETWORKD: DOWN
-.PHONY: DOWN
-DOWN:
+files: down
+.PHONY: down
+down:
+        rm -f /systemd/network/rasping* # legacy crupt
 	systemctl disable systemd-networkd || true
 	systemctl disable wpa_supplicant || true
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
 	systemctl disable dnsmasq || true
+	systemctl disable rasping_autobridge || true
 else
 # installing, bring system up after
-.PHONY: UP
-UP: FILES NETWORKD
-	systemctl enable systemd-networkd
+.PHONY: up
+up: files
+	rm -f /systemd/network/rasping* # legacy cruft
+	systemctl disable systemd-networkd || true
 ifdef WAN_SSID
 	systemctl enable wpa_supplicant
 else
@@ -121,16 +125,17 @@ else
 	systemctl mask hostapd || true
 endif
 	systemctl enable dnsmasq
+	systemctl enable rasping_autobridge
 	@echo 'INSTALL COMPLETE'
 
 # Install packages before files
-FILES NETWORKD: packages
+files: packages
 .PHONY: packages
 packages:;DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
 endif
 
 .PHONY: ${FILES}
-FILES: ${FILES}
+files: ${FILES}
 
 # configure NAT, block everything on the WAN except as defined by UNBLOCK or FORWARD
 /etc/iptables/rules.v4:
@@ -299,88 +304,16 @@ ifdef INSTALL
 	echo 'net.ipv4.tcp_syncookies=1' >> $@
 endif
 
-# Networkd stuff. Note lexical order matters, parsing for an interface stops at
-# the first matching .network file
-NETWORKD =  /etc/systemd/network/rasping-00-define-br0.netdev           # define the bridge device
-NETWORKD += /etc/systemd/network/rasping-01-define-vlan0.netdev         # define the vlan0 device
-NETWORKD += /etc/systemd/network/rasping-02-config-br0.network          # configure bridge IP address
-NETWORKD += /etc/systemd/network/rasping-03-attach-vlan0.network        # attach eth* and usb* interfaces to vlan0
-NETWORKD += /etc/systemd/network/rasping-04-attach-br0.network          # attach interfaces the bridge
-
-.PHONY: ${NETWORKD} nclean
-NETWORKD: ${NETWORKD}
-
-# purge old files before creating new
-${NETWORKD}: nclean
-nclean:; rm -f /etc/systemd/network/rasping*
-
-# Define bridge device
-/etc/systemd/network/rasping-00-define-br0.netdev:
+/etc/systemd/system/rasping_autobridge.service:
+	rm -f $@
 ifdef INSTALL
-	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo '[NetDev]' >> $@
-	echo 'Name=br0' >> $@
-	echo 'Kind=bridge' >> $@
+        echo "[Unit]" >> $@
+        echo "Description=Rasping autobridge service" >> $@
+        echo "[Service]" >> $@
+        echo "ExecStart=/home/pi/rasping/autobridge ~${WAN_IF} ~wlan0 br0"
+        echo "[Install]" >> $@
+        echo "WantedBy=multi-user.target"
 endif
-
-# Define vlan device if enabled
-/etc/systemd/network/rasping-01-define-vlan0.netdev:
-ifdef INSTALL
-ifdef LAN_VLAN
-	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo '[NetDev]' >> $@
-	echo 'Name=vlan0' >> $@
-	echo 'Kind=vlan' >> $@
-	echo '[VLAN]' >> $@
-	echo 'Id=${LAN_VLAN}' >> $@
-endif
-endif
-
-# Configure the bridge.
-/etc/systemd/network/rasping-02-config-br0.network:
-ifdef INSTALL
-ifdef LAN_IP
-	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo '[Match]' >> $@
-	echo 'Name=br0' >> $@
-	echo '[Network]' >> $@
-	echo 'Address=${LAN_IP}/24' >> $@
-	echo 'ConfigureWithoutCarrier=true' >> $@
-	echo 'IgnoreCarrierLoss=true' >> $@
-endif
-endif
-
-# we only support vlan on eth0 or eth1. Sorry if your dongle uses usb0.
-/etc/systemd/network/rasping-03-attach-vlan0.network:
-ifdef INSTALL
-ifdef LAN_VLAN
-	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo '[Match]' >> $@
-ifdef WAN_SSID
-	echo 'Name=eth0' >> $@
-else
-	echo 'Name=eth1' >> $@
-endif
-	echo '[Network]' >> $@
-	echo 'VLAN=vlan0' >> $@
-	echo 'ConfigureWithoutCarrier=true' >> $@
-	echo 'IgnoreCarrierLoss=true' >> $@
-endif
-endif
-/etc/systemd/network/rasping-04-attach-br0.network:
-ifdef INSTALL
-	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo '[Match]' >> $@
-	echo 'Name=! lo wlan0' >> $@
-ifdef LAN_IP
-	echo 'Name=! ${WANIF}' >> $@
-endif
-	echo '[Network]' >> $@
-	echo 'Bridge=br0' >> $@
-	echo 'ConfigureWithoutCarrier=true' >> $@
-	echo 'IgnoreCarrierLoss=true' >> $@
-endif
-
 
 .PHONY: clean uninstall
 clean:
