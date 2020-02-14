@@ -87,6 +87,7 @@ FILES += /etc/default/hostapd
 FILES += /etc/hostapd/rasping.conf
 FILES += /etc/wpa_supplicant/wpa_supplicant.conf
 FILES += /etc/dhcpcd.conf
+FILES += /etc/network/interfaces.d/rasping
 FILES += /etc/dnsmasq.d/rasping.conf
 FILES += /etc/issue.d/rasping.issue
 FILES += /etc/sysctl.d/rasping.conf
@@ -107,6 +108,7 @@ down: legacy
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
 	systemctl disable dnsmasq || true
+        systemctl mask dnsmasq || true
 
 else
 # installing
@@ -124,8 +126,11 @@ else
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
 endif
+        systemctl unmask dnsmasq
 	systemctl enable dnsmasq
+        systemctl enable networking
 	systemctl enable rasping_autobridge
+	systemctl enable rasping_autovlane
 	@echo 'INSTALL COMPLETE'
 
 ${FILES}: packages          # install packages before files
@@ -173,7 +178,7 @@ endif
 	iptables-save -f $@
 endif
 
-# append dhcpcd.conf to set WANIF (or br0) address, static if WAN_IP is defined
+# Use dhcpcd.conf to configure WANIF (or br0), possibly static
 /etc/dhcpcd.conf:
 	sed -i '/rasping start/,/rasping end/d' $@
 ifdef INSTALL
@@ -187,7 +192,7 @@ endif
 	echo 'ipv4only' >> $@
 	echo 'noipv4ll' >> $@
 	echo 'noalias' >> $@
-	echo 'timeout 300' >> $@
+	echo 'timeout 0' >> $@
 ifdef WAN_IP
 ifdef LAN_IP
 	echo 'interface ${WANIF}' >> $@
@@ -200,6 +205,18 @@ endif
 	echo 'nolink' >> $@
 endif
 	echo '# rasping end' >> $@
+endif
+
+# configure bridge static IP
+/etc/network/interfaces.d/rasping:
+	rm -f $@
+ifdef INSTALL
+ifdef LAN_IP
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo 'auto br0' >> $@
+	echo 'iface br0 inet static' >> $@
+	echo 'address ${LAN_IP}/24' >> $@
+endif
 endif
 
 # configure dnsmasq to serve on br0
@@ -221,6 +238,7 @@ endif
 ifdef INSTALL
 ifdef WAN_SSID
 	echo '# rasping start' >> $@
+	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev' >> $@
 	echo 'update_config=1' >> $@
 	echo 'country=${COUNTRY}' >> $@
@@ -326,6 +344,7 @@ endif
 /lib/systemd/system/rasping_autobridge.service:
 	rm -f $@
 ifdef INSTALL
+	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autobridge service' >> $@
 	echo '[Service]' >> $@
@@ -337,6 +356,7 @@ endif
 /lib/systemd/system/rasping_autovlan.service:
 	rm -f $@
 ifdef INSTALL
+	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autovlan service' >> $@
 	echo '[Service]' >> $@
