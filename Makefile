@@ -131,8 +131,6 @@ endif
 	systemctl enable rasping_autobridge
 ifdef LAN_VLAN
 	systemctl enable rasping_autovlan
-else
-	systemctl disable rasping_autovlan
 endif
 	@echo 'INSTALL COMPLETE'
 
