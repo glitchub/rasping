@@ -103,9 +103,9 @@ legacy:
 
 ifndef INSTALL
 # clean/uninstalling, take system down first
-files: down
+files: down legacy
 .PHONY: down
-down: legacy
+down:
 	systemctl disable wpa_supplicant || true
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
@@ -115,8 +115,6 @@ else
 # installing, bring system up after
 .PHONY: up
 up: files
-	rm -f /systemd/network/rasping*             # legacy cruft
-	systemctl disable systemd-networkd || true  # legacy cruft
 ifdef WAN_SSID
 	systemctl enable wpa_supplicant
 else
@@ -134,9 +132,9 @@ endif
 	@echo 'INSTALL COMPLETE'
 
 # Install packages before files
-files: packages
+files: packages legacy
 .PHONY: packages
-packages: legacy; DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
+packages:; DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
 endif
 
 .PHONY: ${FILES}
