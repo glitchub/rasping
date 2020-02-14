@@ -126,9 +126,8 @@ else
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
 endif
-        systemctl unmask dnsmasq
+	systemctl unmask dnsmasq
 	systemctl enable dnsmasq
-        systemctl enable networking
 	systemctl enable rasping_autobridge
 ifdef LAN_VLAN
 	systemctl enable rasping_autovlan
