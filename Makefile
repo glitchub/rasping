@@ -108,7 +108,7 @@ down: legacy
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
 	systemctl disable dnsmasq || true
-        systemctl mask dnsmasq || true
+	systemctl mask dnsmasq || true
 
 else
 # installing
