@@ -336,13 +336,13 @@ ifdef INSTALL
 	echo 'WantedBy=multi-user.target' >> $@
 endif
 
-/lib/systemd/system/rasping_autobridge.service:
+/lib/systemd/system/rasping_autovlan.service:
 	rm -f $@
 ifdef INSTALL
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autovlan service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=/home/pi/rasping/autovlan ~${WANIF} ~wlan0 ${LAN_VLAN}' >> $@ # never vlan the WAN interface
+	echo 'ExecStart=/home/pi/rasping/autovlan ~${WANIF} ~wlan0 ${LAN_VLAN}' >> $@ # never vlan the WAN
         echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 endif
