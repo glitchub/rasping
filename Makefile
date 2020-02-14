@@ -310,9 +310,9 @@ ifdef INSTALL
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autobridge service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=/home/pi/rasping/autobridge ~${WAN_IF} ~wlan0 br0'
+	echo 'ExecStart=/home/pi/rasping/autobridge ~${WAN_IF} ~wlan0 br0' >> $@
 	echo '[Install]' >> $@
-	echo 'WantedBy=multi-user.target'
+	echo 'WantedBy=multi-user.target' >> $@
 endif
 
 .PHONY: clean uninstall
