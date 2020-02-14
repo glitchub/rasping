@@ -16,7 +16,6 @@ Given one or more glob-style network interface name patterns and a vlan id 1 to
 
 Negative patterns start with "~" and matching interfaces will always be
 ignored.
-
 """, file=sys.stderr)
     quit()
 
@@ -34,7 +33,7 @@ for pattern in sys.argv[1:-1]:
         exclude.add(pattern[1:])
     else: include.add(pattern)
 
-if not len(include): include.add('*')
+if not len(include): raise Exception("Must specify at least one positive pattern")
 
 # return list of network interfaces
 def interfaces(): return os.listdir('/sys/class/net')

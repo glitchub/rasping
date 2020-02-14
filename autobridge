@@ -20,7 +20,6 @@ ignored.
 
 If no positive patterns are supplied then the default is "*", i.e. match
 everything.
-
 """, file=sys.stderr)
     quit()
 
