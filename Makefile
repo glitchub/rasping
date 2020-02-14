@@ -78,13 +78,7 @@ ifndef LAN_CHANNEL
 endif
 endif
 
-# legacy cruft to always clean up
-.PHONY: legacy
-legacy:
-	rm -f /etc/systemd/network/rasping*
-	systemctl disable systemd-netword
-
-        # packages to install
+# packages to install
 PACKAGES=iptables-persistent dnsmasq hostapd
 
 # files to generate or alter
@@ -98,6 +92,12 @@ FILES += /etc/issue.d/rasping.issue
 FILES += /etc/sysctl.d/rasping.conf
 FILES += /lib/systemd/system/rasping_autobridge.service
 FILES += /lib/systemd/system/rasping_autovlan.service
+
+# legacy cruft to always clean up
+.PHONY: legacy
+legacy:
+	rm -f /etc/systemd/network/rasping*
+	systemctl disable systemd-netword
 
 .PHONY: files
 
@@ -343,7 +343,7 @@ ifdef INSTALL
 	echo 'Description=Raspberry Pi NAT Gateway autovlan service' >> $@
 	echo '[Service]' >> $@
 	echo 'ExecStart=/home/pi/rasping/autovlan ~${WANIF} ~wlan0 ${LAN_VLAN}' >> $@ # never vlan the WAN
-        echo '[Install]' >> $@
+	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 endif
 .PHONY: clean uninstall
