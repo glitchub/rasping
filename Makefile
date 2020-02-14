@@ -311,15 +311,15 @@ endif
 # determine which interfaces to bridge (or not bridge) based on configuration
 ifdef LAN_IP
 ifdef LAN_VLAN
-    bridgeable = vlan.*             # router with vlan
+    bridgeable = vlan.*             # router mode, with vlan
 else
-    bridgable = ~${WANIF} ~wlan0    # router, no vlan
+    bridgable = ~${WANIF} ~wlan0    # router mode, no vlan
 endif
 else
 ifdef LAN_VLAN
-    bridgable = ${WANIF} vlan.*     # bridge with vlan
+    bridgable = ${WANIF} vlan.*     # bridging mode, with vlan
 else
-    bridgable = ~wlan0              # bridge, no vlan
+    bridgable = ~wlan0              # bridging mode, no vlan
 endif
 endif
 
