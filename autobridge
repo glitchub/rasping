@@ -41,7 +41,7 @@ if not len(include): include.add('*')
 def interfaces(): return os.listdir('/sys/class/net')
 
 # execute the 'ip' command with given command line
-def ip(cmd): return subprocess.call(["sudo", "ip"] + cmd.split())
+def ip(cmd): return subprocess.call(["ip"] + cmd.split())
 
 # return true if string s matches any listed glob
 def matches(s, globs):
