@@ -339,7 +339,6 @@ endif
 /lib/systemd/system/rasping_autobridge.service:
 	rm -f $@
 ifdef INSTALL
-ifdef LAN_VLAN
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autovlan service' >> $@
 	echo '[Service]' >> $@
