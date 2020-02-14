@@ -90,7 +90,7 @@ FILES += /etc/dhcpcd.conf
 FILES += /etc/dnsmasq.d/rasping.conf
 FILES += /etc/issue.d/rasping.issue
 FILES += /etc/sysctl.d/rasping.conf
-FILES += /etc/systemd/system/rasping_autobridge.service
+FILES += /lib/systemd/system/rasping_autobridge.service
 
 .PHONY: files
 
@@ -99,8 +99,8 @@ ifndef INSTALL
 files: down
 .PHONY: down
 down:
-        rm -f /systemd/network/rasping* # legacy crupt
-	systemctl disable systemd-networkd || true
+        rm -f /systemd/network/rasping*             # legacy cruft
+	systemctl disable systemd-networkd || true  # legacy cruft
 	systemctl disable wpa_supplicant || true
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
@@ -110,8 +110,8 @@ else
 # installing, bring system up after
 .PHONY: up
 up: files
-	rm -f /systemd/network/rasping* # legacy cruft
-	systemctl disable systemd-networkd || true
+	rm -f /systemd/network/rasping*             # legacy cruft
+	systemctl disable systemd-networkd || true  # legacy cruft
 ifdef WAN_SSID
 	systemctl enable wpa_supplicant
 else
@@ -304,7 +304,7 @@ ifdef INSTALL
 	echo 'net.ipv4.tcp_syncookies=1' >> $@
 endif
 
-/etc/systemd/system/rasping_autobridge.service:
+/lib/systemd/system/rasping_autobridge.service:
 	rm -f $@
 ifdef INSTALL
 	echo '[Unit]' >> $@
