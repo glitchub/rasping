@@ -307,12 +307,12 @@ endif
 /etc/systemd/system/rasping_autobridge.service:
 	rm -f $@
 ifdef INSTALL
-        echo "[Unit]" >> $@
-        echo "Description=Rasping autobridge service" >> $@
-        echo "[Service]" >> $@
-        echo "ExecStart=/home/pi/rasping/autobridge ~${WAN_IF} ~wlan0 br0"
-        echo "[Install]" >> $@
-        echo "WantedBy=multi-user.target"
+	echo '[Unit]' >> $@
+	echo 'Description=Raspberry Pi NAT Gateway autobridge service' >> $@
+	echo '[Service]' >> $@
+	echo 'ExecStart=/home/pi/rasping/autobridge ~${WAN_IF} ~wlan0 br0'
+	echo '[Install]' >> $@
+	echo 'WantedBy=multi-user.target'
 endif
 
 .PHONY: clean uninstall
