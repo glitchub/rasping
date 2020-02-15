@@ -213,11 +213,11 @@ endif
 /etc/network/interfaces.d/rasping:
 	rm -f $@
 ifdef INSTALL
+ifdef LAN_IP
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'auto br0' >> $@
 	echo 'allow-hotplug br0' >> $@
 	echo 'iface br0 inet static' >> $@
-ifdef LAN_IP
 	echo 'address ${LAN_IP}/24' >> $@
 else
 	echo 'bridge_port eth0' >> $@
