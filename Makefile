@@ -236,7 +236,7 @@ endif
 endif
 
 # Enable wpa_supplicant, if WAN_SSID is defined
-/etc/wpa_supplicant.wpa_supplicant.conf:
+/etc/wpa_supplicant/wpa_supplicant.conf:
 	! [ -e $@ ] || sed -i '/rasping start/,/rasping end/d' $@
 ifdef INSTALL
 ifdef WAN_SSID
