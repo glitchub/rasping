@@ -357,7 +357,7 @@ ifdef INSTALL
 	echo 'ExecStart=${PWD}/autobridge ${bridgable} br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
-        echo 'Before=dhcpcd.service' >> $@
+	echo 'Before=dhcpcd.service' >> $@
 endif
 
 # Enable autovlan
@@ -372,7 +372,7 @@ ifdef LAN_VLAN
 	echo 'ExecStart=${PWD}/autovlan ~${WANIF} ~wlan0 ${LAN_VLAN}' >> $@ # never vlan the WAN
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
-        echo 'Before=rasping_autobridge.service' >> $@
+	echo 'Before=rasping_autobridge.service' >> $@
 endif
 endif
 
