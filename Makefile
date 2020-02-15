@@ -220,7 +220,7 @@ ifdef INSTALL
 ifdef LAN_IP
 	echo 'address ${LAN_IP}/24' >> $@
 else
-        echo 'bridge_port eth0' >> $@
+	echo 'bridge_port eth0' >> $@
 endif
 endif
 
