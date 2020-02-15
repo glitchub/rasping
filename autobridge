@@ -58,6 +58,9 @@ else:
         raise Exception("%s is not a bridge" % bridge)
     print("Using bridge %s" % bridge)
 
+# make sure the bridge is up
+ip("link set %s up" % bridge)
+
 print("Waiting for interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
 
 # spin forever looking for new interfaces to add to the bridge
@@ -69,6 +72,3 @@ while True:
             if ip("link set dev %s master %s up" % (i, bridge)):
                 print("Could not add %s, ignoring it" % i)
                 exclude.add(i)
-            else:
-                # make sure the bridge is up
-                ip("link set %s up" % bridge)
