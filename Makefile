@@ -99,7 +99,8 @@ FILES += /lib/systemd/system/rasping_autovlan.service
 #
 ifndef INSTALL
 # cleaning
-.PHONY: down
+.PHONY: default down
+default: ${FILES}
 ${FILES}: down              # remove files, but take down the system first
 down: legacy
 	systemctl disable rasping_autobridge || true
@@ -112,7 +113,8 @@ down: legacy
 
 else
 # installing
-.PHONY: up packages
+.PHONY: default up packages
+default: up
 up: ${FILES}                # bring uip the system, but install files first
 ifdef WAN_SSID
 	systemctl enable wpa_supplicant
@@ -213,15 +215,12 @@ endif
 /etc/network/interfaces.d/rasping:
 	rm -f $@
 ifdef INSTALL
+ifdef LAN_IP
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'auto br0' >> $@
-ifdef LAN_IP
 	echo 'allow-hotplug br0' >> $@
 	echo 'iface br0 inet static' >> $@
 	echo 'address ${LAN_IP}/24' >> $@
-else
-	echo 'iface br0 inet manual' >> $@
-	echo 'bridge_port eth0' >> $@
 endif
 endif
 
@@ -358,6 +357,7 @@ ifdef INSTALL
 	echo 'ExecStart=${PWD}/autobridge ${bridgable} br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
+        echo 'Before=dhcpcd.service' >> $@
 endif
 
 # Enable autovlan
@@ -372,6 +372,7 @@ ifdef LAN_VLAN
 	echo 'ExecStart=${PWD}/autovlan ~${WANIF} ~wlan0 ${LAN_VLAN}' >> $@ # never vlan the WAN
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
+        echo 'Before=rasping_autobridge.service' >> $@
 endif
 endif
 
