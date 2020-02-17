@@ -196,7 +196,7 @@ endif
 	echo 'ipv4only' >> $@
 	echo 'noipv4ll' >> $@
 	echo 'noalias' >> $@
-	echo 'timeout 0' >> $@
+	echo 'timeout 30' >> $@
 ifdef WAN_IP
 ifdef LAN_IP
 	echo 'interface ${WANIF}' >> $@
@@ -364,7 +364,7 @@ else
 endif
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
-	echo 'Before=dhcpcd.service' >> $@
+	echo 'Before=dncpcd.service' >> $@
 endif
 
 # Enable autovlan
