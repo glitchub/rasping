@@ -18,6 +18,8 @@ appear.
 
 Options are:
 
+    -i ip.ad.re.ss/nm - specify static IP for the bridge
+
     -u interface - specify the upstream interface. The bridge will be forced
     down if this interface doesn't exist or doesn't have carrier.
 
@@ -31,10 +33,10 @@ bridge = sys.argv[-1]
 exclude={'lo', bridge}
 include=set()
 upstream=None
-carrier_count=None
+staticip=None
 
 try:
-    opts, args = getopt(sys.argv[1:],"u:x:")
+    opts, args = getopt(sys.argv[1:],"u:x:i:")
     if len(args) < 2: raise Exception("Must specify at least one pattern and a bridge name.")
     include.update(args[:-1])
     bridge=args[-1]
@@ -43,6 +45,9 @@ try:
             if upstream: raise Exception("Can't specify -u more than once.")
             upstream = arg
             include.add(upstream)
+        if opt == "-i":
+            if staticip: raise Exception("Can't specify -i more than once.")
+            staticip = arg
         elif opt == "-x":
             exclude.add(arg)
 except Exception as e:
@@ -86,6 +91,10 @@ else:
     else:
         print("Using bridge %s" % bridge)
         upbridge(True)
+if staticip:
+    print("Setting static IP %s" % staticip)
+    ip("address flush dev %s" % bridge)
+    if ip("address add %s dev %s" % (staticip, bridge)): raise Exception("Could not set IP address %s" % staticip)
 
 print("Auto-bridging interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
 

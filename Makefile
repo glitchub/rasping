@@ -87,7 +87,6 @@ FILES += /etc/default/hostapd
 FILES += /etc/hostapd/rasping.conf
 FILES += /etc/wpa_supplicant/wpa_supplicant.conf
 FILES += /etc/dhcpcd.conf
-FILES += /etc/network/interfaces.d/rasping
 FILES += /etc/dnsmasq.d/rasping.conf
 FILES += /etc/issue.d/rasping.issue
 FILES += /etc/sysctl.d/rasping.conf
@@ -146,6 +145,7 @@ endif
 # expunge legacy stuff
 .PHONY: legacy
 legacy:
+	rm -f /etc/network/interfaces.d/rasping
 	rm -f /etc/systemd/network/rasping*
 	systemctl disable systemd-networkd || true
 
@@ -209,19 +209,6 @@ endif
 	echo 'nolink' >> $@
 endif
 	echo '# rasping end' >> $@
-endif
-
-# Configure bridge with static IP
-/etc/network/interfaces.d/rasping:
-	rm -f $@
-ifdef INSTALL
-ifdef LAN_IP
-	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo 'auto br0' >> $@
-	echo 'allow-hotplug br0' >> $@
-	echo 'iface br0 inet static' >> $@
-	echo 'address ${LAN_IP}/24' >> $@
-endif
 endif
 
 # Configure dnsmasq to serve on br0
@@ -335,23 +322,29 @@ endif
 ifdef LAN_IP
  # router mode
  ifdef LAN_VLAN
-    bridgeable = vlan.*                 # bridge vlan
+    # bridge vlan
+    bridgeable = vlan.*
  else
-    bridgable = -x ${WANIF} *           # bridge all except WAN
+    # bridge all except WAN
+    bridgable = -x ${WANIF} *
  endif
 else
  ifdef LAN_VLAN
   # bridged mode
   ifndef WAN_IP
-    bridgable = -u ${WANIF} vlan.*      # bridge vlan with dhcp via eth0 upstream
+    # bridge vlan with dhcp via eth0 upstream
+    bridgable = -u ${WANIF} vlan.*
   else
-    bridgable = ${WANIF} vlan.*         # static IP, bridge vlan and eth0
+    # static IP, bridge vlan and eth0
+    bridgable = ${WANIF} vlan.*
   endif
  else
   ifndef WAN_IP
-    bridgable = -u ${WANIF} *           # bridge all with dhcp via eth0 upstream
+    # bridge all with dhcp via eth0 upstream
+    bridgable = -u ${WANIF} *
   else
-    bridgable = *                       # static IP, bridge all
+    # static IP, bridge all
+    bridgable = *
   endif
  endif
 endif
@@ -364,7 +357,11 @@ ifdef INSTALL
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autobridge service' >> $@
 	echo '[Service]' >> $@
+ifdef LAN_IP
+	echo 'ExecStart=${PWD}/autobridge -i ${LAN_IP}/24 -x wlan0 ${bridgable} br0' >> $@
+else
 	echo 'ExecStart=${PWD}/autobridge -x wlan0 ${bridgable} br0' >> $@
+endif
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 	echo 'Before=dhcpcd.service' >> $@
