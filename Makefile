@@ -333,24 +333,27 @@ endif
 
 # Determine which interfaces to bridge (or not bridge) based on configuration
 ifdef LAN_IP
-ifdef LAN_VLAN
-    bridgeable = vlan.*                 # router mode, bridge vlan
+ # router mode
+ ifdef LAN_VLAN
+    bridgeable = vlan.*                 # bridge vlan
+ else
+    bridgable = -x ${WANIF} *           # bridge all except WAN
+ endif
 else
-    bridgable = -x ${WANIF} *           # router mode, bridge all except WAN
-endif
-else
-ifdef LAN_VLAN
-ifndef WAN_IP
-    bridgable = -u ${WANIF} vlan.*      # bridging mode, bridge vlan with dhcp via eth0 upstream
-else
-    bridgable = ${WANIF} vlan.*         # bridging mode with static IP, bridge vlan and eth0
-endif
-else
-ifndef WAN_IP
-    bridgable = -u ${WANIF} *           # bridging mode, bridge all with dhcp via eth0 upstream
-else
-    bridgable = *                       # bridging mode with static IP, bridge all
-endif
+ ifdef LAN_VLAN
+  # bridged mode
+  ifndef WAN_IP
+    bridgable = -u ${WANIF} vlan.*      # bridge vlan with dhcp via eth0 upstream
+  else
+    bridgable = ${WANIF} vlan.*         # static IP, bridge vlan and eth0
+  endif
+ else
+  ifndef WAN_IP
+    bridgable = -u ${WANIF} *           # bridge all with dhcp via eth0 upstream
+  else
+    bridgable = *                       # static IP, bridge all
+  endif
+ endif
 endif
 
 # Enable autobridge of bridgable interfaces
@@ -361,7 +364,7 @@ ifdef INSTALL
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autobridge service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=${PWD}/autobridge ${bridgable} br0' >> $@
+	echo 'ExecStart=${PWD}/autobridge -x wlan0 ${bridgable} br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 	echo 'Before=dhcpcd.service' >> $@
