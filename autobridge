@@ -81,12 +81,17 @@ def matches(s, globs):
             return True
     return False
 
-if not bridge in interfaces():
-    if ip("link add name %s type bridge" % bridge):
-        raise Exception("Could not create bridge %s" % bridge)
+if bridge in interfaces():
+    if ip("link delete %s" % bridge):
+        raise Exception("Could not remove existing %s" % bridge)
 
-if not os.path.isdir("/sys/class/net/%s/brif" % bridge):
-    raise Exception("%s is not a bridge" % bridge)
+if ip("link add name %s type bridge" % bridge):
+    raise Exception("Could not create %s" % bridge)
+
+if staticip:
+    print("Setting static IP %s" % staticip)
+    ip("address flush dev %s" % bridge)
+    if ip("address add %s dev %s" % (staticip, bridge)): raise Exception("Could not set IP address %s" % staticip)
 
 if upstream:
     print("Using bridge %s with upstream %s" % (bridge, upstream))
@@ -94,11 +99,6 @@ if upstream:
 else:
     print("Using bridge %s" % bridge)
     upbridge(True)
-
-if staticip:
-    print("Setting static IP %s" % staticip)
-    ip("address flush dev %s" % bridge)
-    if ip("address add %s dev %s" % (staticip, bridge)): raise Exception("Could not set IP address %s" % staticip)
 
 print("Auto-bridging interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
 
