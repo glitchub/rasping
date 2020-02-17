@@ -334,15 +334,22 @@ endif
 # Determine which interfaces to bridge (or not bridge) based on configuration
 ifdef LAN_IP
 ifdef LAN_VLAN
-    bridgeable = vlan.*             # router mode, with vlan
+    bridgeable = vlan.*                 # router mode, bridge vlan
 else
-    bridgable = ~${WANIF} ~wlan0    # router mode, no vlan
+    bridgable = -x ${WANIF} *           # router mode, bridge all except WAN
 endif
 else
 ifdef LAN_VLAN
-    bridgable = ${WANIF} vlan.*     # bridging mode, with vlan
+ifndef WAN_IP
+    bridgable = -u ${WANIF} vlan.*      # bridging mode, bridge vlan with dhcp via eth0 upstream
 else
-    bridgable = ~wlan0              # bridging mode, no vlan
+    bridgable = ${WANIF} vlan.*         # bridging mode with static IP, bridge vlan and eth0
+endif
+else
+ifndef WAN_IP
+    bridgable = -u ${WANIF} *           # bridging mode, bridge all with dhcp via eth0 upstream
+else
+    bridgable = *                       # bridging mode with static IP, bridge all
 endif
 endif
 
@@ -369,7 +376,7 @@ ifdef LAN_VLAN
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autovlan service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=${PWD}/autovlan ~${WANIF} ~wlan0 ${LAN_VLAN}' >> $@ # never vlan the WAN
+	echo 'ExecStart=${PWD}/autovlan -x ${WANIF} -x wlan0 ${LAN_VLAN}' >> $@ # never vlan the WAN
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 	echo 'Before=rasping_autobridge.service' >> $@

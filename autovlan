@@ -1,39 +1,40 @@
-#!/usr/bin/python3 -3
+#!/usr/bin/python3 -u
+#Note unbuffered output
 
 import os, sys
 from fnmatch import fnmatch
 from time import sleep
+from getopt import getopt
 import subprocess
 
-if len(sys.argv) < 3:
-    print("""
+usage="""
 Usage:
 
-    autovlan [~]pattern [... [~]pattern] vlanid
+    autovlan [options] pattern [... pattern] vlanid
 
 Given one or more glob-style network interface name patterns and a vlan id 1 to
 4094, create a vlan for each matching interface.
 
-Negative patterns start with "~" and matching interfaces will always be
-ignored.
-""", file=sys.stderr)
-    quit()
+Options are:
 
-# parse command line params
-vlanid = int(sys.argv[-1])
-assert 1 <= vlanid <= 4094
-print("Using vlan tag %d" % vlanid);
+    -x pattern - interfaces that match this patterm will always be ignored. Can
+    be used multiple times.
+"""
 
-exclude={'lo','vlan*'}
+exclude={'lo'}
 include=set()
 
-for pattern in sys.argv[1:-1]:
-    if pattern.startswith("~"):
-        if not pattern[1:]: raise Exception("Invalid pattern %s" % pattern)
-        exclude.add(pattern[1:])
-    else: include.add(pattern)
-
-if not len(include): raise Exception("Must specify at least one positive pattern")
+try:
+    opts, args = getopt(sys.argv[1:],"x:")
+    if len(args) < 2: raise Exception("Must specify at least one pattern and a vlan ID.")
+    include.update(args[:-1])
+    vlanid=args[-1]
+    assert 1 <= int(vlanid) <= 4094
+    for opt, arg in opts:
+        if opt == "-x": exclude.add(arg)
+except Exception as e:
+    print (str(e), usage, file=sys.stderr)
+    quit(1)
 
 # return list of network interfaces
 def interfaces(): return os.listdir('/sys/class/net')
@@ -48,14 +49,22 @@ def matches(s, globs):
             return True
     return False
 
-print("Waiting for interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
+print("Applying vlan ID %s to interfaces that match %s but not %s" % (vlanid, str(include)[1:-1], str(exclude)[1:-1]))
+
+ignore=[] # interfaces that failed to add properly
+
 while True:
-    sleep(1)
-    for i in interfaces():
-        if matches(i, include) and not matches(i, exclude):
+    current=interfaces()
+
+    # unignore unplugged interfaces
+    for i in set(ignore) - set(current): ignore.remove(i)
+
+    for i in current:
+        if matches(i, include) and not matches(i, exclude) and i not in ignore:
             v="vlan.%s" % i
-            if v not in interfaces():
-                print("Creating vlan %s with id %d" % (v, vlanid))
-                if ip("link add link %s name %s type vlan id %d" % (i, v, vlanid)):
+            if v not in current:
+                print("Creating vlan %s" % v)
+                if ip("link add link %s name %s type vlan id %s" % (i, v, vlanid)):
                     print("Could not create %s, ignoring %s" % (v, i))
-                    exclude.add(i)
+                    ignore.append(i)
+    sleep(1)
