@@ -62,13 +62,16 @@ def ip(cmd): return subprocess.call(["ip"] + cmd.split())
 
 isup=None # initial state unknown
 def upbridge(up):
+    global isup
     if up:
         if isup != True:
-            if ip("link set dev %s up" % bridge): raise Exception("Could not set bridge up!")
+            print("Setting bridge up")
+            if ip("link set dev %s up" % bridge): raise Exception("Could not set bridge up")
             isup = True
     else:
         if isup != False:
-            if ip("link set dev %s down" % bridge): raise Exception("Could not set bridge down!")
+            print("Setting bridge down")
+            if ip("link set dev %s down" % bridge): raise Exception("Could not set bridge down")
             isup = False
 
 # return true if string s matches any listed glob
@@ -79,18 +82,19 @@ def matches(s, globs):
     return False
 
 if not bridge in interfaces():
-    print("Creating bridge %s" % bridge)
     if ip("link add name %s type bridge" % bridge):
         raise Exception("Could not create bridge %s" % bridge)
+
+if not os.path.isdir("/sys/class/net/%s/brif" % bridge):
+    raise Exception("%s is not a bridge" % bridge)
+
+if upstream:
+    print("Using bridge %s with upstream %s" % (bridge, upstream))
+    upbridge(False)
 else:
-    if not os.path.isdir("/sys/class/net/%s/brif" % bridge):
-        raise Exception("%s is not a bridge" % bridge)
-    if upstream:
-        print("Using bridge %s with upstream %s" % (bridge, upstream))
-        upbridge(False)
-    else:
-        print("Using bridge %s" % bridge)
-        upbridge(True)
+    print("Using bridge %s" % bridge)
+    upbridge(True)
+
 if staticip:
     print("Setting static IP %s" % staticip)
     ip("address flush dev %s" % bridge)
