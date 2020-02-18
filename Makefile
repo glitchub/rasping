@@ -197,6 +197,7 @@ ifndef WAN_IP
 	echo 'noalias' >> $@
 	echo 'timeout 30' >> $@
 else
+        echo 'denyinterfaces *' >> $@
 	echo 'interface $(if ${LAN_IP},${WANIF},br0)' >> $@
 	echo 'static ip_address=${WAN_IP}' >> $@
 	echo 'static routers=${WAN_GW}' >> $@
@@ -321,7 +322,7 @@ ifdef INSTALL
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autobridge service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=${PWD}/autobridge $(if ${LAN_IP},-i${LAN_IP}/24 -x${WAN_IF},${WAN_IF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
+	echo 'ExecStart=${PWD}/autobridge $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 	echo 'Before=dncpcd.service' >> $@
