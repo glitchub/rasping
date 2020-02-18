@@ -64,7 +64,11 @@ while True:
             v="vlan.%s" % i
             if v not in current:
                 print("Creating vlan %s" % v)
-                if ip("link add link %s name %s type vlan id %s" % (i, v, vlanid)):
+                # first we have to up the real interface, then the vlan
+                if ip("link set dev %s up" % i):
+                    print("Could not bring %s up, ignoring it" % i)
+                    ignore.append(i)
+                elif ip("link add link %s name %s type vlan id %s" % (i, v, vlanid)):
                     print("Could not create %s, ignoring %s" % (v, i))
                     ignore.append(i)
     sleep(1)
