@@ -108,14 +108,16 @@ while True:
             if ip("link set dev %s master %s up" % (i, bridge)):
                 print("Could not add %s" % i)
                 ignore.append(i)
-            if i == upstream: upcount=None
 
-        if i == upstream:
-            with open("/sys/class/net/%s/carrier_up_count" % upstream) as f: u=f.read()
+    if upstream:
+        if upstream in current:
+            with open("/sys/class/net/%s/carrier_up_count" % upstream) as f: u=f.read().strip()
             if u != upcount:
                 upcount = u
-                print("%s upcount is %s, cycling the bridge" % (i, upcount))
+                print("%s upcount is %s, cycling the bridge" % (upstream, upcount))
                 cycle(bridge)
+        else:
+            upcount=None
 
     # Repeat every second
     sleep(1)
