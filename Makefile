@@ -190,20 +190,16 @@ endif
 ifdef INSTALL
 	echo '# rasping start' >> $@
 	echo '# Raspberry Pi NAT Gateway' >> $@
-ifndef WAN_IP
 	echo 'allowinterfaces $(if ${LAN_IP},${WANIF},br0)' >> $@
 	echo 'ipv4only' >> $@
 	echo 'noipv4ll' >> $@
 	echo 'noalias' >> $@
 	echo 'timeout 30' >> $@
-else
-	echo 'denyinterfaces *' >> $@
+ifdef WAN_IP
 	echo 'interface $(if ${LAN_IP},${WANIF},br0)' >> $@
 	echo 'static ip_address=${WAN_IP}' >> $@
 	echo 'static routers=${WAN_GW}' >> $@
 	echo 'static domain_name_servers=${WAN_DNS}' >> $@
-	echo 'noipv4ll' >> $@
-	echo 'nolink' >> $@
 endif
 	echo '# rasping end' >> $@
 endif
