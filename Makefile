@@ -256,7 +256,7 @@ endif
 ifdef INSTALL
 ifdef LAN_SSID
 	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo 'interface=wlan1' >> $@
+	echo 'interface=wlan0' >> $@
 	echo 'bridge=br0' >> $@
 	echo 'ssid=${LAN_SSID}' >> $@
 	echo 'ieee80211d=1' >> $@
