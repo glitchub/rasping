@@ -321,7 +321,7 @@ ifdef INSTALL
 	echo 'ExecStart=${PWD}/autobridge -xwlan0 $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
-	echo 'Before=dncpcd.service' >> $@
+	echo 'Before=hostapd.service dncpcd.service' >> $@
 endif
 
 # Enable autovlan
