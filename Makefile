@@ -255,7 +255,7 @@ endif
 ifdef INSTALL
 ifdef LAN_SSID
 	echo '# Raspberry Pi NAT Gateway' >> $@
-	echo 'interface=wlan0' >> $@
+	echo 'interface=wlan1' >> $@
 	echo 'bridge=br0' >> $@
 	echo 'ssid=${LAN_SSID}' >> $@
 	echo 'ieee80211d=1' >> $@
@@ -318,7 +318,7 @@ ifdef INSTALL
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autobridge service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=${PWD}/autobridge -xwlan0 $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
+	echo 'ExecStart=${PWD}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 	echo 'Before=hostapd.service dncpcd.service' >> $@
@@ -333,7 +333,7 @@ ifdef LAN_VLAN
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autovlan service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=${PWD}/autovlan -x${WANIF} -xwlan0 ${LAN_VLAN}' >> $@ # never vlan the WAN
+	echo 'ExecStart=${PWD}/autovlan -xvlan* -xwlan* -x${WANIF} * ${LAN_VLAN}' >> $@ # never vlan the WAN
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 endif
