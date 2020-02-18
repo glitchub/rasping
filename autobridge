@@ -68,6 +68,12 @@ def matches(s, globs):
             return True
     return False
 
+# cycle inteface down and up
+# this is intended to kick dhcp in the butt
+def cycle(iface):
+    if ip("link set dev %s down" % iface) or ip("link set dev %s up" % iface):
+        raise Exception("Could not cycle %s" % iface)
+
 print("Using bridge %s" % bridge)
 
 if bridge not in interfaces():
@@ -80,7 +86,7 @@ if staticip:
     if ip("address add %s dev %s" % (staticip, bridge)):
         raise Exception("Could not set bridge address")
 
-if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge interface")
+cycle(bridge)
 
 print("Auto-bridging interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
 if upstream: print("Upstream interface is %s" % upstream)
@@ -107,10 +113,9 @@ while True:
         if i == upstream:
             with open("/sys/class/net/%s/carrier_up_count" % upstream) as f: u=f.read()
             if u != upcount:
-                # upstream interface change, kick dhcp in the butt
-                ip("link set dev %s down" % bridge)
-                ip("link set dev %s up" % bridge)
                 upcount = u
+                print("%s upcount is %s, cycling the bridge" % (i, upcount))
+                cycle(bridge)
 
     # Repeat every second
     sleep(1)
