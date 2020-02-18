@@ -197,7 +197,7 @@ ifndef WAN_IP
 	echo 'noalias' >> $@
 	echo 'timeout 30' >> $@
 else
-        echo 'denyinterfaces *' >> $@
+	echo 'denyinterfaces *' >> $@
 	echo 'interface $(if ${LAN_IP},${WANIF},br0)' >> $@
 	echo 'static ip_address=${WAN_IP}' >> $@
 	echo 'static routers=${WAN_GW}' >> $@
