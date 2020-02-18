@@ -23,10 +23,23 @@ Options are:
     -x pattern - interfaces that match this patterm will always be ignored. Can
     be used multiple times.
 
-    -u inteface - define the upstream interface, the bridge will toggle down
-    then up whenever this interface has carrier event.
+    -u inteface - define the upstream interface, the bridge will cycle down
+    and up whenever this interface has a carrier up event.
 
 """
+
+# return list of network interfaces
+def interfaces(): return os.listdir('/sys/class/net')
+
+# execute the 'ip' command with given command line
+def ip(cmd): return subprocess.call(["ip"] + cmd.split())
+
+# return true if string s matches any listed glob
+def matches(s, globs):
+    for g in globs:
+        if fnmatch(s, g):
+            return True
+    return False
 
 # parse command line param
 bridge = sys.argv[-1]
@@ -48,31 +61,12 @@ try:
             exclude.add(arg)
         elif opt == "-u":
             if upstream: raise Exception("Can't specify -u more than once.")
-            include.add(arg)
-            upstream = arg
+            upstream = arg      # remember it
+            include.add(arg)    # also autobridge it
 
 except Exception as e:
     print (str(e), usage, file=sys.stderr)
     quit(1)
-
-# return list of network interfaces
-def interfaces(): return os.listdir('/sys/class/net')
-
-# execute the 'ip' command with given command line
-def ip(cmd): return subprocess.call(["ip"] + cmd.split())
-
-# return true if string s matches any listed glob
-def matches(s, globs):
-    for g in globs:
-        if fnmatch(s, g):
-            return True
-    return False
-
-# cycle inteface down and up
-# this is intended to kick dhcp in the butt
-def cycle(iface):
-    if ip("link set dev %s down" % iface) or ip("link set dev %s up" % iface):
-        raise Exception("Could not cycle %s" % iface)
 
 print("Using bridge %s" % bridge)
 
@@ -84,16 +78,16 @@ if staticip:
     print("Setting static IP %s" % staticip)
     ip("address flush dev %s" % bridge)
     if ip("address add %s dev %s" % (staticip, bridge)):
-        raise Exception("Could not set bridge address")
+        raise Exception("Could not set bridge IP")
 
-cycle(bridge)
+if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge")
 
 print("Auto-bridging interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
 if upstream: print("Upstream interface is %s" % upstream)
 
-ignore=[] # interfaces that failed to add properly
+ignore = [] # Interfaces that failed to add properly
 
-upcount=None # track upstream interface up count
+upcount = None  # Upstream interface up count
 
 while True:
     current=interfaces()
@@ -104,20 +98,22 @@ while True:
     # add new interfaces to bridge
     for i in set(current) - set(os.listdir('/sys/class/net/%s/brif' % bridge)):
         if matches(i, include) and not matches(i, exclude) and not matches(i, ignore):
-            print("Adding %s to %s" % (i, bridge))
+            print("Adding %s to bridge" % i)
             if ip("link set dev %s master %s up" % (i, bridge)):
-                print("Could not add %s" % i)
+                print("Could not add %s, ignoring it" % i)
                 ignore.append(i)
 
+    # Cycle the bridge state whenever upstream interface changes(intended to trigger dhcpcd).
     if upstream:
         if upstream in current:
             with open("/sys/class/net/%s/carrier_up_count" % upstream) as f: u=f.read().strip()
             if u != upcount:
                 upcount = u
                 print("%s upcount is %s, cycling the bridge" % (upstream, upcount))
-                cycle(bridge)
+                if ip("link set dev %s down" % bridge): raise Exception("Could not down bridge")
+                if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge")
         else:
-            upcount=None
+            upcount = None
 
     # Repeat every second
     sleep(1)
