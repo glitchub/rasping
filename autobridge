@@ -61,12 +61,9 @@ def matches(s, globs):
 
 print("Using bridge %s" % bridge)
 
-if bridge in interfaces():
-    if ip("link delete %s" % bridge):
-        raise Exception("Could not remove old bridge")
-
-if ip("link add name %s type bridge" % bridge):
-    raise Exception("Could not create bridge")
+if bridge not in interfaces():
+    if ip("link add name %s type bridge" % bridge):
+        raise Exception("Could not create bridge")
 
 if staticip:
     print("Setting static IP %s" % staticip)
