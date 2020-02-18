@@ -245,6 +245,7 @@ ifdef LAN_SSID
 	echo '# rasping start' >> $@
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo 'DAEMON_CONF=/etc/hostapd/rasping.conf' >> $@
+        echo 'DAEMON_OPTS="-dd"' >> $@
 	echo '# rasping end' >> $@
 endif
 endif
