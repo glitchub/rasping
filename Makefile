@@ -90,8 +90,8 @@ FILES += /etc/dhcpcd.conf
 FILES += /etc/dnsmasq.d/rasping.conf
 FILES += /etc/issue.d/rasping.issue
 FILES += /etc/sysctl.d/rasping.conf
-FILES += /lib/systemd/system/rasping_autobridge.service
-FILES += /lib/systemd/system/rasping_autovlan.service
+FILES += /lib/systemd/system/autobridge.service
+FILES += /lib/systemd/system/autovlan.service
 .PHONY: ${FILES}
 
 # NO RULES ABOVE THIS POINT
@@ -102,8 +102,8 @@ ifndef INSTALL
 default: ${FILES}
 ${FILES}: down              # remove files, but take down the system first
 down: legacy
-	systemctl disable rasping_autobridge || true
-	systemctl disable rasping_autovlan || true
+	systemctl disable autobridge || true
+	systemctl disable autovlan || true
 	systemctl disable wpa_supplicant || true
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
@@ -131,9 +131,9 @@ else
 endif
 	systemctl unmask dnsmasq
 	systemctl enable dnsmasq
-	systemctl enable rasping_autobridge
+	systemctl enable autobridge
 ifdef LAN_VLAN
-	systemctl enable rasping_autovlan
+	systemctl enable autovlan
 endif
 	@echo 'INSTALL COMPLETE'
 
@@ -311,7 +311,7 @@ ifdef INSTALL
 endif
 
 # Enable autobridge of bridgable interfaces
-/lib/systemd/system/rasping_autobridge.service:
+/lib/systemd/system/autobridge.service:
 	rm -f $@
 ifdef INSTALL
 	echo '# Raspberry Pi NAT Gateway' >> $@
@@ -325,7 +325,7 @@ ifdef INSTALL
 endif
 
 # Enable autovlan
-/lib/systemd/system/rasping_autovlan.service:
+/lib/systemd/system/autovlan.service:
 	rm -f $@
 ifdef INSTALL
 ifdef LAN_VLAN
@@ -336,7 +336,6 @@ ifdef LAN_VLAN
 	echo 'ExecStart=${PWD}/autovlan -x${WANIF} -xwlan0 ${LAN_VLAN}' >> $@ # never vlan the WAN
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
-	echo 'Before=rasping_autobridge.service' >> $@
 endif
 endif
 
