@@ -319,7 +319,7 @@ ifdef INSTALL
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autobridge service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=${PWD}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
+	echo 'ExecStart=${PWD}/autobridge -xwlan* -xbr* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 	echo 'Before=hostapd.service dncpcd.service' >> $@
@@ -334,7 +334,7 @@ ifdef LAN_VLAN
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autovlan service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=${PWD}/autovlan -xvlan* -xwlan* -x${WANIF} * ${LAN_VLAN}' >> $@ # never vlan the WAN
+	echo 'ExecStart=${PWD}/autovlan -xvlan* -xwlan* -xbr* -x${WANIF} * ${LAN_VLAN}' >> $@ # never vlan the WAN
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 endif
