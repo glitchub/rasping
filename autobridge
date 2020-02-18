@@ -23,12 +23,16 @@ Options are:
     -x pattern - interfaces that match this patterm will always be ignored. Can
     be used multiple times.
 
+    -u inteface - define the upstream interface, the bridge will toggle down
+    then up whenever this interface has carrier event.
+
 """
 
 # parse command line param
 bridge = sys.argv[-1]
 exclude={'lo', bridge}
 include=set()
+upstream=None
 staticip=None
 
 try:
@@ -42,6 +46,11 @@ try:
             staticip = arg
         elif opt == "-x":
             exclude.add(arg)
+        elif opt == "-u":
+            if upstream: raise Exception("Can't specify -u more than once.")
+            include.add(arg)
+            upstream = arg
+
 except Exception as e:
     print (str(e), usage, file=sys.stderr)
     quit(1)
@@ -74,8 +83,11 @@ if staticip:
 if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge interface")
 
 print("Auto-bridging interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
+if upstream: print("Upstream interface is %s" % upstream)
 
 ignore=[] # interfaces that failed to add properly
+
+upcount=None # track upstream interface up count
 
 while True:
     current=interfaces()
@@ -90,6 +102,15 @@ while True:
             if ip("link set dev %s master %s up" % (i, bridge)):
                 print("Could not add %s" % i)
                 ignore.append(i)
+            if i == upstream: upcount=None
+
+        if i == upstream:
+            with open("/sys/class/net/%s/carrier_up_count" % upstream) as f: u=f.read()
+            if u != upcount:
+                # upstream interface change, kick dhcp in the butt
+                ip("link set dev %s down" % bridge)
+                ip("link set dev %s up" % bridge)
+                upcount = u
 
     # Repeat every second
     sleep(1)
