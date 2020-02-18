@@ -129,8 +129,13 @@ else
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
 endif
+ifdef LAN_IP
 	systemctl unmask dnsmasq
 	systemctl enable dnsmasq
+else
+	systemctl disable dnsmasq || true
+	systemctl mask dnsmasq || true
+endif
 	systemctl enable autobridge
 ifdef LAN_VLAN
 	systemctl enable autovlan
