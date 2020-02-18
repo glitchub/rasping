@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -u
-#Note unbuffered output
+# Note unbuffered output
 
 import os, sys
 from fnmatch import fnmatch
@@ -18,13 +18,10 @@ appear.
 
 Options are:
 
-    -i ip.ad.re.ss/nm - specify static IP for the bridge
+    -i ip.ad.re.ss/nm - specify static IP for the bridge.
 
-    -u interface - specify the upstream interface. The bridge will be forced
-    down if this interface doesn't exist or doesn't have carrier.
-
-    -x pattern - interfaces that match this patterm will always be ignored
-    (except for the upstream interface). Can be used multiple times.
+    -x pattern - interfaces that match this patterm will always be ignored. Can
+    be used multiple times.
 
 """
 
@@ -32,7 +29,6 @@ Options are:
 bridge = sys.argv[-1]
 exclude={'lo', bridge}
 include=set()
-upstream=None
 staticip=None
 
 try:
@@ -41,10 +37,6 @@ try:
     include.update(args[:-1])
     bridge=args[-1]
     for opt, arg in opts:
-        if opt == "-u":
-            if upstream: raise Exception("Can't specify -u more than once.")
-            upstream = arg
-            include.add(upstream)
         if opt == "-i":
             if staticip: raise Exception("Can't specify -i more than once.")
             staticip = arg
@@ -59,20 +51,6 @@ def interfaces(): return os.listdir('/sys/class/net')
 
 # execute the 'ip' command with given command line
 def ip(cmd): return subprocess.call(["ip"] + cmd.split())
-
-isup=None # initial state unknown
-def upbridge(up):
-    global isup
-    if up:
-        if isup != True:
-            print("Setting bridge up")
-            if ip("link set dev %s up" % bridge): raise Exception("Could not set bridge up")
-            isup = True
-    else:
-        if isup != False:
-            print("Setting bridge down")
-            if ip("link set dev %s down" % bridge): raise Exception("Could not set bridge down")
-            isup = False
 
 # return true if string s matches any listed glob
 def matches(s, globs):
@@ -94,13 +72,9 @@ if staticip:
     print("Setting static IP %s" % staticip)
     ip("address flush dev %s" % bridge)
     if ip("address add %s dev %s" % (staticip, bridge)):
-        raise Exception("Could not set address")
+        raise Exception("Could not set bridge address")
 
-if upstream:
-    print("Upstream interface is %s" % upstream)
-    upbridge(False)
-else:
-    upbridge(True)
+if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge interface")
 
 print("Auto-bridging interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
 
@@ -109,31 +83,16 @@ ignore=[] # interfaces that failed to add properly
 while True:
     current=interfaces()
 
-    # unignore interfaces that no longer exist
+    # unignore interfaces that no longer exist (e.g. unplugged usb)
     for i in set(ignore) - set(current): ignore.remove(i)
 
-    # bridge goes down if upstream is unplugged
-    if upstream:
-        if upstream in current:
-            try:
-                with open("/sys/class/net/%s/carrier" % upstream) as f: carrier=bool(f.read())
-            except:
-                # Hmmm
-                print("Could not read %s carrier!" % upstream)
-                carrier = False
-            # take bridge up if upstream has carrier
-            upbridge(carrier)
-        else:
-            upbridge(False)
-
-    # add interfaces to bridge if it's up
-    if isup:
-        for i in set(current) - set(os.listdir('/sys/class/net/%s/brif' % bridge)):
-            if matches(i, include) and not matches(i, exclude) and not matches(i, ignore):
-                print("Adding %s to %s" % (i, bridge))
-                if ip("link set dev %s master %s up" % (i, bridge)):
-                    print("Could not add %s" % i)
-                    if i != upstream: ignore.append(i)
+    # add new interfaces to bridge
+    for i in set(current) - set(os.listdir('/sys/class/net/%s/brif' % bridge)):
+        if matches(i, include) and not matches(i, exclude) and not matches(i, ignore):
+            print("Adding %s to %s" % (i, bridge))
+            if ip("link set dev %s master %s up" % (i, bridge)):
+                print("Could not add %s" % i)
+                ignore.append(i)
 
     # Repeat every second
     sleep(1)

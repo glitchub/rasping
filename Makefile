@@ -190,24 +190,18 @@ endif
 ifdef INSTALL
 	echo '# rasping start' >> $@
 	echo '# Raspberry Pi NAT Gateway' >> $@
-ifdef LAN_IP
-	echo 'allowinterfaces ${WANIF}' >> $@
-else
-	echo 'allowinterfaces br0' >> $@
-endif
+ifndef WAN_IP
+	echo 'allowinterfaces $(if ${LAN_IP},${WANIF},br0)' >> $@
 	echo 'ipv4only' >> $@
 	echo 'noipv4ll' >> $@
 	echo 'noalias' >> $@
 	echo 'timeout 30' >> $@
-ifdef WAN_IP
-ifdef LAN_IP
-	echo 'interface ${WANIF}' >> $@
 else
-	echo 'interface br0' >> $@
-endif
+	echo 'interface $(if ${LAN_IP},${WANIF},br0)' >> $@
 	echo 'static ip_address=${WAN_IP}' >> $@
 	echo 'static routers=${WAN_GW}' >> $@
 	echo 'static domain_name_server=${WAN_DNS}' >> $@
+	echo 'noipv4ll' >> $@
 	echo 'nolink' >> $@
 endif
 	echo '# rasping end' >> $@
@@ -319,38 +313,6 @@ ifdef INSTALL
 	echo 'net.ipv4.tcp_syncookies=1' >> $@
 endif
 
-
-# Determine which interfaces to bridge (or not bridge) based on configuration
-ifdef LAN_IP
- # router mode
- ifdef LAN_VLAN
-    # bridge vlan
-    bridgeable = vlan.*
- else
-    # bridge all except WAN
-    bridgable = -x ${WANIF} *
- endif
-else
- ifdef LAN_VLAN
-  # bridged mode
-  ifndef WAN_IP
-    # bridge vlan with dhcp via eth0 upstream
-    bridgable = -u ${WANIF} vlan.*
-  else
-    # static IP, bridge vlan and eth0
-    bridgable = ${WANIF} vlan.*
-  endif
- else
-  ifndef WAN_IP
-    # bridge all with dhcp via eth0 upstream
-    bridgable = -u ${WANIF} *
-  else
-    # static IP, bridge all
-    bridgable = *
-  endif
- endif
-endif
-
 # Enable autobridge of bridgable interfaces
 /lib/systemd/system/rasping_autobridge.service:
 	rm -f $@
@@ -359,11 +321,7 @@ ifdef INSTALL
 	echo '[Unit]' >> $@
 	echo 'Description=Raspberry Pi NAT Gateway autobridge service' >> $@
 	echo '[Service]' >> $@
-ifdef LAN_IP
-	echo 'ExecStart=${PWD}/autobridge -i ${LAN_IP}/24 -x wlan0 ${bridgable} br0' >> $@
-else
-	echo 'ExecStart=${PWD}/autobridge -x wlan0 ${bridgable} br0' >> $@
-endif
+	echo 'ExecStart=${PWD}/autobridge $(if ${LAN_IP},-i${LAN_IP}/24 -x${WAN_IF},${WAN_IF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 	echo 'Before=dncpcd.service' >> $@
