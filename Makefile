@@ -201,7 +201,7 @@ else
 	echo 'interface $(if ${LAN_IP},${WANIF},br0)' >> $@
 	echo 'static ip_address=${WAN_IP}' >> $@
 	echo 'static routers=${WAN_GW}' >> $@
-	echo 'static domain_name_server=${WAN_DNS}' >> $@
+	echo 'static domain_name_servers=${WAN_DNS}' >> $@
 	echo 'noipv4ll' >> $@
 	echo 'nolink' >> $@
 endif
