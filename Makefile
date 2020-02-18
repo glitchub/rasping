@@ -116,11 +116,13 @@ else
 default: up
 up: ${FILES}                # bring uip the system, but install files first
 ifdef WAN_SSID
+	rfkill unblock wifi || true
 	systemctl enable wpa_supplicant
 else
 	systemctl disable wpa_supplicant
 endif
 ifdef LAN_SSID
+	rfkill unblock wifi || true
 	systemctl unmask hostapd
 	systemctl enable hostapd
 else
