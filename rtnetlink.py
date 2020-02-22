@@ -94,14 +94,14 @@ class rtnetlink():
                         # 0-terminated string
                         value = data[4:nla_len].split(b"\x00")[0].decode("ascii")
                     elif name is "stats":
-                        # struct rtnl_link_stats (from if_link.h)
+                        # struct rtnl_link_stats, 24 unsigned ints
                         if event["ifla"]["stats"]:
                             # don't overwrite existing stats
                             name = None
                         else:
                             value=dict(zip(self._stat, struct.unpack("=24L", data[4:nla_len])))
                     elif name is "stats64":
-                        # data is struct rtnl_link_stats64, same as stats but with 64-bit counters
+                        # struct rtnl_link_stats64, same fields names as stats but 24 unsigned long longs (64-bit),
                         # overwrite existing "stats"
                         name = "stats"
                         value=dict(zip(self._stat, struct.unpack("=24Q", data[4:nla_len])))
