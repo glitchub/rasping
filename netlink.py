@@ -89,7 +89,7 @@ class rtnetlink():
                     value = None
                     if name in ["address", "broadcast"]:
                         # colon-seperated octets
-                        value = ":".join(list("%02X" % c for c in list(data[4:nla_len])))
+                        value = ":".join(list("%02X" % c for c in list(bytearray(data[4:nla_len]))))
                     elif name in ["ifname", "ifalias"]:
                         # 0-terminated string
                         value = data[4:nla_len].split(b"\x00")[0].decode("ascii")
@@ -127,4 +127,7 @@ class rtnetlink():
 if __name__ == "__main__":
     import pprint;
     nl=rtnetlink()
-    while True: pprint.pprint(nl.event(10))
+    while True:
+        e=nl.event(10);
+        if e: print(e["ifla"]["ifname"])
+        pprint.pprint(e)
