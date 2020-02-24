@@ -2,10 +2,9 @@
 # Note unbuffered output
 
 import os, sys
-from fnmatch import fnmatch
-from time import sleep
 from getopt import getopt
 import subprocess
+import rtnl
 
 usage="""
 Usage:
@@ -23,49 +22,42 @@ Options are:
     -x pattern - interfaces that match this patterm will always be ignored. Can
     be used multiple times.
 
-    -u inteface - define the upstream interface, the bridge will cycle down
-    and up whenever this interface has a carrier up event.
+    -u inteface - bridge will be down when the upstream interface is missing or
+    doesn't have carrier.
 
 """
 
-# return list of network interfaces
+# return list of network interfaces, scraped from sysfs
 def interfaces(): return os.listdir('/sys/class/net')
 
 # execute the 'ip' command with given command line
 def ip(cmd): return subprocess.call(["ip"] + cmd.split())
 
-# return true if string s matches any listed glob
-def matches(s, globs):
-    for g in globs:
-        if fnmatch(s, g):
-            return True
-    return False
-
 # parse command line param
-bridge = sys.argv[-1]
-exclude={'lo', bridge}
-include=set()
-upstream=None
-staticip=None
+bridge = sys.argv[-1]   # bridge name
+reject={'lo', bridge}   # list of interfaces to ignore
+accept=set()            # list of interfaces to be bridged
+upstream=None           # upstream interface, if any
+staticip=None           # static IP to apply to bridge, if any
 
 try:
     opts, args = getopt(sys.argv[1:],"u:x:i:")
     if len(args) < 2: raise Exception("Must specify at least one pattern and a bridge name.")
-    include.update(args[:-1])
+    accept.update(args[:-1])
     bridge=args[-1]
     for opt, arg in opts:
         if opt == "-i":
             if staticip: raise Exception("Can't specify -i more than once.")
             staticip = arg
         elif opt == "-x":
-            exclude.add(arg)
+            reject.add(arg)
         elif opt == "-u":
             if upstream: raise Exception("Can't specify -u more than once.")
-            upstream = arg      # remember it
-            include.add(arg)    # also autobridge it
+            upstream = arg     # remember it
+            accept.add(arg)    # also autobridge it
 
 except Exception as e:
-    print (str(e), usage, file=sys.stderr)
+    print(str(e), usage, file=sys.stderr)
     quit(1)
 
 print("Using bridge %s" % bridge)
@@ -81,39 +73,41 @@ if staticip:
         raise Exception("Could not set bridge IP")
 
 if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge")
+upbridge=True
 
-print("Auto-bridging interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
+print("Auto-bridging interfaces that match %s but not %s" % (str(accept)[1:-1], str(reject)[1:-1]))
 if upstream: print("Upstream interface is %s" % upstream)
 
-ignore = [] # Interfaces that failed to add properly
+bridged = set() # bridged interfaces
 
-upcount = None  # Upstream interface up count
+# configure netlink
+nl=rtnl(reject=reject, accept=accept)
+nl.dump()   # request initial interface dump
+for event in nl.read():
+    if not event: continue  # end of dump
 
-while True:
-    current=interfaces()
+    ifname=event["ifname"]
+    attached=event["attached"]
+    carrier=event["carrier"]
+    print("%s: attached=%s carrier=%s" % (ifname, attached, carrier)
 
-    # unignore interfaces that no longer exist (e.g. unplugged usb)
-    for i in set(ignore) - set(current): ignore.remove(i)
-
-    # add new interfaces to bridge
-    for i in set(current) - set(os.listdir('/sys/class/net/%s/brif' % bridge)):
-        if matches(i, include) and not matches(i, exclude) and not matches(i, ignore):
-            print("Adding %s to bridge" % i)
-            if ip("link set dev %s master %s up" % (i, bridge)):
-                print("Could not add %s, ignoring it" % i)
-                ignore.append(i)
-
-    # Cycle the bridge state whenever upstream interface changes(intended to trigger dhcpcd).
-    if upstream:
-        if upstream in current:
-            with open("/sys/class/net/%s/carrier_up_count" % upstream) as f: u=f.read().strip()
-            if u != upcount:
-                upcount = u
-                print("%s upcount is %s, cycling the bridge" % (upstream, upcount))
-                if ip("link set dev %s down" % bridge): raise Exception("Could not down bridge")
-                if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge")
+    # Bridge up state follows upstream interface, intended to trigger dhcpcd.
+    if ifname == upstream and upbridge != carrier:
+        if carrier:
+            print("Taking bridge up")
+            if ip("link set dev %s up" % bridge):
+                raise Exception("Could not up bridge")
         else:
-            upcount = None
+            print("Taking bridge down")
+            if ip("link set dev %s down" % bridge):
+                raise Exception("Could not down bridge")
+        upbridge = carrier
 
-    # Repeat every second
-    sleep(1)
+    if not attached:
+        try: bridged.remove(ifname)
+        except KeyError: pass
+    elif ifname not in bridged:
+        print("Adding %s to bridge" % i)
+        bridged.add(ifname)
+        if ip("link set dev %s master %s up" % (ifname, bridge)):
+            print("Could not add %s, ignoring it" % ifname)

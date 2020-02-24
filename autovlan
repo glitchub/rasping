@@ -21,54 +21,51 @@ Options are:
     be used multiple times.
 """
 
-exclude={'lo'}
-include=set()
+reject={'lo'}
+accept=set()
 
 try:
     opts, args = getopt(sys.argv[1:],"x:")
     if len(args) < 2: raise Exception("Must specify at least one pattern and a vlan ID.")
-    include.update(args[:-1])
+    accept.update(args[:-1])
     vlanid=args[-1]
     assert 1 <= int(vlanid) <= 4094
     for opt, arg in opts:
-        if opt == "-x": exclude.add(arg)
+        if opt == "-x": reject.add(arg)
 except Exception as e:
     print (str(e), usage, file=sys.stderr)
     quit(1)
 
-# return list of network interfaces
-def interfaces(): return os.listdir('/sys/class/net')
-
 # execute the 'ip' command with given command line
 def ip(cmd): return subprocess.call(["ip"] + cmd.split())
 
-# return true if string s matches any listed glob
-def matches(s, globs):
-    for g in globs:
-        if fnmatch(s, g):
-            return True
-    return False
-
-print("Applying vlan ID %s to interfaces that match %s but not %s" % (vlanid, str(include)[1:-1], str(exclude)[1:-1]))
+print("Applying vlan ID %s to interfaces that match %s but not %s" % (vlanid, str(accept)[1:-1], str(reject)[1:-1]))
 
 ignore=[] # interfaces that failed to add properly
 
-while True:
-    current=interfaces()
+nl=netlink(accept=accept, reject=reject)
+nl.dump()
 
-    # unignore unplugged interfaces
-    for i in set(ignore) - set(current): ignore.remove(i)
+for event in nl.read():
 
-    for i in current:
-        if matches(i, include) and not matches(i, exclude) and i not in ignore:
-            v="vlan.%s" % i
-            if v not in current:
-                print("Creating vlan %s" % v)
-                # first we have to up the real interface, then the vlan
-                if ip("link set dev %s up" % i):
-                    print("Could not bring %s up, ignoring it" % i)
+    if not event: continue # ignore end of dump
+
+    ifname=event["ifname"]
+
+    if not event["attached"]:
+        # interface is gone, forget we ignored it
+        # note the vlan will go away when the interface does
+        try: ignore.remove(ifname)
+        except KeyError: pass
+    elif iface not in ignore:
+        v="vlan.%s" % iface
+        if v not in interfaces():
+            print("Creating vlan %s" % v)
+            if not event["up"]:
+                # up the interface first
+                if ip("link set dev %s up" % iface):
+                    print("Could not bring %s up, ignoring it" % iface)
                     ignore.append(i)
-                elif ip("link add link %s name %s type vlan id %s" % (i, v, vlanid)):
-                    print("Could not create %s, ignoring %s" % (v, i))
-                    ignore.append(i)
-    sleep(1)
+            if ip("link add link %s name %s type vlan id %s" % (iface, v, vlanid)):
+                print("Could not create %s, ignoring %s" % (v, iface))
+                ignore.append(iface)
