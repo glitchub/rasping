@@ -93,15 +93,15 @@ for event in nl.read():
     if not event.attached:
         bridged.discard(event.ifname)
     elif event.ifname not in bridged:
-        # note we also force the interface up
         print("Adding %s to bridge" % event.ifname)
-        bridged.add(event.ifname)
-        if ip("link set dev %s master %s up" % (event.ifname, bridge)): 
+        # this also forces the interface up
+        if ip("link set dev %s master %s up" % (event.ifname, bridge)):
             print("Could not add %s, ignoring it" % event.ifname)
+        bridged.add(event.ifname)
 
     # Bridge goes up or down when upstream interface does. This is enabled when
     # dhcpcd is listening on the bridge interface.
-    # Note we ignore events that don't actually report carrier.
+    # Note, ignore events that don't actually report carrier
     if event.carrier is not None and event.ifname == upstream:
         if event.attached and event.up and event.carrier and not upbridge:
             print("Taking bridge up")
@@ -113,4 +113,3 @@ for event in nl.read():
             if ip("link set dev %s down" % bridge):
                 raise Exception("Could not down bridge")
             upbridge = False
-

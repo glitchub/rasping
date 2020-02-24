@@ -4,12 +4,20 @@ import os, struct, socket, time, select, fnmatch
 # python2 doesn't support monotonic time, use the wall clock for timeouts
 if 'monotonic' not in dir(time): time.monotonic=time.time
 
-# event is just a dict with some special properties
-class event(dict):
-    attached=None
-    carrier=None
-    ifname=None
-    up=None   
+# event is just a container
+class event():
+    def __init__(self, nlmsg, ifi, iff, ifla):
+        self.nlmsg=nlmsg
+        self.ifi=ifi
+        self.iff=iff
+        self.ifla=ifla
+
+        # create some short hand accessors
+        self.attached = nlmsg["type"]==16 # RTM_NEWLINK
+        self.ifname = ifla["ifname"]
+        self.up = iff["up"]
+        c = ifla.get("carrier")
+        self.carrier = None if c is None else bool(c)
 
 class rtnl():
     # The nlmsg_xxx symbols from netlink.h, minus the "nlmsg_"
@@ -165,23 +173,12 @@ class rtnl():
                     ifla = self._attributes(data[32 : nlmsg["len"]])
                     if ifla:
                         if self.debug: print("ifla =", ifla)
-                        # create dict of dictsyield event dict
-                        e = event((("nlmsg", nlmsg), ("ifi", ifi), ("ifla", ifla), ("iff", iff)))
-                        # init common properties
-                        e.ifname=ifla.get("ifname")
-                        e.attached=nlmsg["type"]
-                        e.up=iff["up"]
-                        c=ifla.get("carrier")
-                        if c is not None: c = bool(c)
-                        e.carrier=c
-                        yield e
+                        yield event(nlmsg, ifi, iff, ifla) # yield an event
 
                 # advance to next packet, if any
                 data = data[nlmsg["len"]:]
 
 if __name__ == "__main__":
-    import pprint;
-
     nl=rtnl(reject=[])  # initialize, don't block 'lo' by default
     nl.dump()           # initially dump all interfaces
 
@@ -191,8 +188,12 @@ if __name__ == "__main__":
             if not e:
                 print("End of dump!")
             else:
-                pprint.pprint(e, width=1000)
+                print("nlmsg =", str(e.nlmsg))
+                print("ifi =", str(e.ifi))
+                print("iff =", str(e.iff))
+                print("ifla =", str(e.ifla))
                 print("%s: attached=%s up=%s carrier=%s" % (e.ifname, e.attached, e.up, e.carrier))
+                print()
             wantcr=True
         if wantcr:
             print("")
