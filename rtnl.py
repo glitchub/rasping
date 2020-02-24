@@ -1,10 +1,10 @@
 from __future__ import print_function
 import os, struct, socket, time, select, fnmatch
 
-# python2 doesn't support monotonic time, just use the wall clock
+# python2 doesn't support monotonic time, use the wall clock for timeouts
 if 'monotonic' not in dir(time): time.monotonic=time.time
 
-class rtnetlink():
+class rtnl():
     # The nlmsg_xxx symbols from netlink.h, minus the "nlmsg_"
     _nlmsg_fields = [ "len", "type", "flags", "seq", "pid" ]
 
@@ -33,7 +33,16 @@ class rtnetlink():
                      "tx_heartbeat_errors", "tx_window_errors",
                      "rx_compressed", "tx_compressed", "rx_nohandler" ]
 
+    # Bits in ifi_flags, in order starting with LSB
+    _iff_bits = [ "up", "broadcast", "debug", "loopback", "pointopoint",
+                  "notrailers", "running", "noarp", "promisc", "allmulti",
+                  "master", "slave", "multicast", "portsel", "automedia",
+                  "dynamic", "lower_up", "dormant", "echo" ]
+
     # Open the netlink socket
+    # reject is list of globs that match interfaces to reject
+    # accept is list of globs that matching interfaces to report
+    # debug flag spews stuff to stdout
     def __init__(self, accept=['*'], reject=['lo'], debug=False):
         self.accept=accept
         self.reject=reject
@@ -104,14 +113,22 @@ class rtnetlink():
                 elif nla_len == 8:
                     # generic 32-bit data
                     ifla[field]=struct.unpack("=L", data[4:8])[0]
+                elif self.debug:
+                    print("Don't know how to decode IFLA_%s" % field.upper())
 
             # skip to next attribute, note we pad nla_len to multiple of 4
             data = data[((nla_len+3) & ~3):]
 
+        if not ifla.get("ifname"):
+            if self.debug: print("Dropping event without ifname")
+            return None
+
         return ifla
 
-    # read a netlink event. Returns None after timeout, if specified, or after a dump is complete.
-    # this is a generator
+    # Return a netlink event. Note this is an iterator, for use with "for".
+    # If a dump was previous requested, yields None when the dump is complete.
+    # If timeout (seconds) is specified, exits if no event reported within that
+    # time.
     def read(self, timeout=None):
         if timeout: timeout += time.monotonic()
         while True:
@@ -126,41 +143,48 @@ class rtnetlink():
                 if self.debug: print("nlmsg =", nlmsg)
                 if nlmsg["len"] > len(data): break
 
-                if nlmsg["type"] == 3: yield {}                     # NLMSG_DONE from netlink.h
+                if nlmsg["type"] == 3: yield None                   # NLMSG_DONE from netlink.h
                 elif len(data) >= 32 and nlmsg["type"] in [16,17]:  # RTM_NEWLINK or RTM_DELLINK from rtnetlink.h
                     # next 16 bytes is ifinfomsg, from rtnetlink.h
                     ifi=dict(zip(self._ifi_fields, struct.unpack("=BxHlLL",data[16:32])))
                     if self.debug: print("ifi =", ifi)
+                    # parse interface flags to iff
+                    iff={}
+                    for b,v in enumerate(self._iff_bits): iff[v]=bool(ifi["flags"] & (1 << b))
+                    if self.debug: print("iff =", iff)
 
                     # process the rest of the packet for netlink attributes
                     ifla = self._attributes(data[32 : nlmsg["len"]])
                     if ifla:
                         if self.debug: print("ifla =", ifla)
-                        # return dict of dicts
-                        yield {"attached":nlmsg["type"]==16, "nlmsg":nlmsg, "ifi":ifi, "ifla":ifla}
+                        # yield a dict
+                        yield {"attached" : nlmsg["type"]==16,      # extract common information
+                               "ifname" : ifla.get("ifname"),
+                               "carrier" : bool(ifla.get("carrier")),
+                               "up": iff["up"],
+                               "nlmsg" : nlmsg,                     # add the decoded data structures
+                               "ifi" : ifi,
+                               "ifla" : ifla,
+                               "iff" : iff }
 
                 # advance to next packet, if any
                 data = data[nlmsg["len"]:]
 
 if __name__ == "__main__":
     import pprint;
-    nl=rtnetlink(debug=1)
-    cr=False
-    prior=None
-    repeat=0
 
-    nl.dump() # initially dump all interfaces
+    nl=rtnl(reject=[])  # initialize, don't block 'lo' by default
+    nl.dump()           # initially dump all interfaces
+
+    wantcr=False
     while True:
-        for e in nl.read(1):
-            this=pprint.pformat(e, width=1)
-            if this == prior:
-                repeat += 1
-                print("Repeat",repeat)
+        for event in nl.read(1):    # note without the timeout this loop would never exit
+            if not event:
+                print("End of dump!")
             else:
-                print(this)
-                prior = this
-                repeat = 0
-            cr=True
-        if cr:
+                pprint.pprint(event, width=1000)
+                print("%s: attached=%s up=%s carrier=%s" % (event["ifname"], event["attached"], event["up"], event["carrier"]))
+            wantcr=True
+        if wantcr:
             print("")
-            cr=False
+            wantcr=False
