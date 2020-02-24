@@ -1,11 +1,10 @@
 #!/usr/bin/python3 -u
 #Note unbuffered output
 
-import os, sys
+import os, sys, subprocess, rtnl
 from fnmatch import fnmatch
 from time import sleep
 from getopt import getopt
-import subprocess
 
 usage="""
 Usage:
@@ -36,36 +35,37 @@ except Exception as e:
     print (str(e), usage, file=sys.stderr)
     quit(1)
 
+# return list of network interfaces, scraped from sysfs
+def interfaces(): return os.listdir('/sys/class/net')
+
 # execute the 'ip' command with given command line
 def ip(cmd): return subprocess.call(["ip"] + cmd.split())
 
 print("Applying vlan ID %s to interfaces that match %s but not %s" % (vlanid, str(accept)[1:-1], str(reject)[1:-1]))
 
-ignore=[] # interfaces that failed to add properly
+vlan=set() # interfaces that we have vlan'd (or failed to)
 
-nl=netlink(accept=accept, reject=reject)
-nl.dump()
+nl=rtnl.rtnl(accept=accept, reject=reject)
+nl.dump() # initially dump all existing interfaces
 
 for event in nl.read():
-
+    
     if not event: continue # ignore end of dump
 
-    ifname=event["ifname"]
+    ifname = event["ifname"]
+    attached = event["attached"]
 
-    if not event["attached"]:
-        # interface is gone, forget we ignored it
-        # note the vlan will go away when the interface does
-        try: ignore.remove(ifname)
-        except KeyError: pass
-    elif iface not in ignore:
-        v="vlan.%s" % iface
+    if not attached:
+        vlan.discard(ifname)
+    elif ifname not in vlan:
+        v="vlan.%s" % ifname
         if v not in interfaces():
             print("Creating vlan %s" % v)
-            if not event["up"]:
-                # up the interface first
-                if ip("link set dev %s up" % iface):
-                    print("Could not bring %s up, ignoring it" % iface)
-                    ignore.append(i)
-            if ip("link add link %s name %s type vlan id %s" % (iface, v, vlanid)):
-                print("Could not create %s, ignoring %s" % (v, iface))
-                ignore.append(iface)
+            # up the interface first
+            if ip("link set dev %s up" % ifname):
+                print("Could not bring %s up, ignoring it" % ifname)
+            elif ip("link add link %s name %s type vlan id %s" % (ifname, v, vlanid)):
+                print("Could not create %s, ignoring %s" % (v, ifname))
+        else:
+            print("Using existing vlan %s" % v)
+        vlan.add(ifname)

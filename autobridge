@@ -62,6 +62,7 @@ except Exception as e:
 
 print("Using bridge %s" % bridge)
 
+# create bridge if necessary
 if bridge not in interfaces():
     if ip("link add name %s type bridge" % bridge):
         raise Exception("Could not create bridge")
@@ -72,42 +73,44 @@ if staticip:
     if ip("address add %s dev %s" % (staticip, bridge)):
         raise Exception("Could not set bridge IP")
 
+# initially force bridge up
 if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge")
 upbridge=True
 
 print("Auto-bridging interfaces that match %s but not %s" % (str(accept)[1:-1], str(reject)[1:-1]))
 if upstream: print("Upstream interface is %s" % upstream)
 
-bridged = set() # bridged interfaces
+bridged = set() # interfaces that we have added to the bridge (or attempted to add but failed)
 
 # configure netlink
-nl=rtnl(reject=reject, accept=accept)
+nl=rtnl.rtnl(reject=reject, accept=accept)
 nl.dump()   # request initial interface dump
 for event in nl.read():
     if not event: continue  # end of dump
 
-    ifname=event["ifname"]
-    attached=event["attached"]
-    carrier=event["carrier"]
-    print("%s: attached=%s carrier=%s" % (ifname, attached, carrier)
+    print("%s: attached=%s up=%s carrier=%s" % (event.ifname, event.attached, event.up, event.carrier))
 
-    # Bridge up state follows upstream interface, intended to trigger dhcpcd.
-    if ifname == upstream and upbridge != carrier:
-        if carrier:
+    if not event.attached:
+        bridged.discard(event.ifname)
+    elif event.ifname not in bridged:
+        # note we also force the interface up
+        print("Adding %s to bridge" % event.ifname)
+        bridged.add(event.ifname)
+        if ip("link set dev %s master %s up" % (event.ifname, bridge)): 
+            print("Could not add %s, ignoring it" % event.ifname)
+
+    # Bridge goes up or down when upstream interface does. This is enabled when
+    # dhcpcd is listening on the bridge interface.
+    # Note we ignore events that don't actually report carrier.
+    if event.carrier is not None and event.ifname == upstream:
+        if event.attached and event.up and event.carrier and not upbridge:
             print("Taking bridge up")
             if ip("link set dev %s up" % bridge):
                 raise Exception("Could not up bridge")
+            upbridge = True
         else:
             print("Taking bridge down")
             if ip("link set dev %s down" % bridge):
                 raise Exception("Could not down bridge")
-        upbridge = carrier
+            upbridge = False
 
-    if not attached:
-        try: bridged.remove(ifname)
-        except KeyError: pass
-    elif ifname not in bridged:
-        print("Adding %s to bridge" % i)
-        bridged.add(ifname)
-        if ip("link set dev %s master %s up" % (ifname, bridge)):
-            print("Could not add %s, ignoring it" % ifname)

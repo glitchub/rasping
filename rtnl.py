@@ -4,6 +4,13 @@ import os, struct, socket, time, select, fnmatch
 # python2 doesn't support monotonic time, use the wall clock for timeouts
 if 'monotonic' not in dir(time): time.monotonic=time.time
 
+# event is just a dict with some special properties
+class event(dict):
+    attached=None
+    carrier=None
+    ifname=None
+    up=None   
+
 class rtnl():
     # The nlmsg_xxx symbols from netlink.h, minus the "nlmsg_"
     _nlmsg_fields = [ "len", "type", "flags", "seq", "pid" ]
@@ -132,8 +139,9 @@ class rtnl():
     def read(self, timeout=None):
         if timeout: timeout += time.monotonic()
         while True:
-            s = select.select([self.sock],[],[], timeout-time.monotonic() if timeout else None)
-            if not s[0]: return
+            if timeout:
+                s = select.select([self.sock],[],[], max(0, timeout-time.monotonic()))
+                if not s[0]: return
             data = self.sock.recv(65535)
             if self.debug: print("Packet = %d bytes" % len(data))
 
@@ -157,15 +165,16 @@ class rtnl():
                     ifla = self._attributes(data[32 : nlmsg["len"]])
                     if ifla:
                         if self.debug: print("ifla =", ifla)
-                        # yield a dict
-                        yield {"attached" : nlmsg["type"]==16,      # extract common information
-                               "ifname" : ifla.get("ifname"),
-                               "carrier" : bool(ifla.get("carrier")),
-                               "up": iff["up"],
-                               "nlmsg" : nlmsg,                     # add the decoded data structures
-                               "ifi" : ifi,
-                               "ifla" : ifla,
-                               "iff" : iff }
+                        # create dict of dictsyield event dict
+                        e = event((("nlmsg", nlmsg), ("ifi", ifi), ("ifla", ifla), ("iff", iff)))
+                        # init common properties
+                        e.ifname=ifla.get("ifname")
+                        e.attached=nlmsg["type"]
+                        e.up=iff["up"]
+                        c=ifla.get("carrier")
+                        if c is not None: c = bool(c)
+                        e.carrier=c
+                        yield e
 
                 # advance to next packet, if any
                 data = data[nlmsg["len"]:]
@@ -178,12 +187,12 @@ if __name__ == "__main__":
 
     wantcr=False
     while True:
-        for event in nl.read(1):    # note without the timeout this loop would never exit
-            if not event:
+        for e in nl.read(1):    # note without the timeout this loop would never exit
+            if not e:
                 print("End of dump!")
             else:
-                pprint.pprint(event, width=1000)
-                print("%s: attached=%s up=%s carrier=%s" % (event["ifname"], event["attached"], event["up"], event["carrier"]))
+                pprint.pprint(e, width=1000)
+                print("%s: attached=%s up=%s carrier=%s" % (e.ifname, e.attached, e.up, e.carrier))
             wantcr=True
         if wantcr:
             print("")
