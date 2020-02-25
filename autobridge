@@ -32,8 +32,8 @@ def ip(cmd): return subprocess.call(["ip"] + cmd.split())
 
 # parse command line param
 bridge = sys.argv[-1]   # bridge name
-reject={'lo', bridge}   # list of interfaces to ignore
-accept=set()            # list of interfaces to be bridged
+reject={'lo', bridge}   # set of interfaces to ignore
+accept=set()            # set of interfaces to be bridged
 upstream=None           # upstream interface, if any
 staticip=None           # static IP to apply to bridge, if any
 
@@ -73,9 +73,9 @@ def upbridge(up):
 
 # add interface to bridge and set it up
 def addbridge(ifname):
-    print("Adding %s to bridge" % i.ifname)
-    if ip("link set dev %s master %s up" % (i.ifname, bridge)):
-        print("Could not add %s" % i.ifname)
+    print("Adding %s to bridge" % ifname)
+    if ip("link set dev %s master %s up" % (ifname, bridge)):
+        print("Could not add %s" % ifname)
 
 print("Auto-bridging interfaces that match %s but not %s" % (str(accept)[1:-1], str(reject)[1:-1]))
 if upstream: print("Upstream interface is %s" % upstream)
@@ -85,12 +85,13 @@ got=False       # found bridge device
 isup=None       # upstream device is up
 bridged=set()   # currently bridged interfaces
 
-for i in nl.dump(accept=[accept,bridge], reject=reject):
-    if i.ifname is bridge:
+# dump without filter
+for i in nl.dump():
+    if i.ifname == bridge:
         got=True
-    else:
+    elif netlink.matches(i.ifname, accept) and not netlink.matches(i.ifname, reject):
         bridged.add(i.ifname)
-        if i.ifname is upstream: isup = i.up and i.carrier
+        if i.ifname == upstream: isup = i.up and i.carrier
 
 if not got:
     print("Creating %s" % bridge)
@@ -124,8 +125,8 @@ for i in nl.wait(accept=accept, reject=reject):
         addbridge(i.ifname)
 
     # bridge follows the state of the upstream device
-    if i.ifname is upstream:
+    if i.ifname == upstream:
         up = i.attached and i.carrier and i.up
         if up != isup:
             upbridge(up)
-            isup=up
+            isup = up
