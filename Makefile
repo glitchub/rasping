@@ -109,6 +109,7 @@ down: legacy
 	systemctl mask hostapd || true
 	systemctl disable dnsmasq || true
 	systemctl mask dnsmasq || true
+        raspi-config nonint do_boot_wait 0
 
 else
 # installing
@@ -140,6 +141,7 @@ endif
 ifdef LAN_VLAN
 	systemctl enable autovlan
 endif
+        raspi-config nonint do_boot_wait 1
 	@echo 'INSTALL COMPLETE'
 
 ${FILES}: packages          # install packages before files
