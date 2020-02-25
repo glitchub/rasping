@@ -73,7 +73,7 @@ def upbridge(up):
 
 # add interface to bridge and set it up
 def addbridge(ifname):
-    print("Adding %s to bridge" % ifname)
+    print("Bridging", ifname)
     if ip("link set dev %s master %s up" % (ifname, bridge)):
         print("Could not add %s" % ifname)
 
@@ -118,7 +118,9 @@ for i in bridged: addbridge(i)
 for i in nl.wait(accept=accept, reject=reject):
     if not i.attached:
         # e.g. usb dongle unplugged
-        bridged.discard(i.ifname)
+        if i.ifname in bridged:
+            print("Forgetting", i.ifname)
+            bridged.discard(i.ifname)
     elif i.ifname not in bridged:
         # a new device
         bridged.add(i.ifname)
