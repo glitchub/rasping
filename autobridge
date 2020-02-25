@@ -17,13 +17,13 @@ appear.
 
 Options are:
 
-    -i ip.ad.re.ss/nm - specify static IP for the bridge.
+    -i ip.ad.re.ss/nm - set static IP for the bridge.
 
     -x pattern - interfaces that match this patterm will always be ignored. Can
     be used multiple times.
 
-    -u inteface - bridge will be down when the upstream interface is missing or
-    doesn't have carrier.
+    -u inteface - bridge state cycles the upstream interface state changes from
+    down to up.
 
 """
 
@@ -62,27 +62,18 @@ print("Using bridge %s" % bridge)
 # create the netlink object
 nl=netlink.netlink()
 
-# set bridge up or down
-def upbridge(up):
-    if up:
-        print("Taking bridge up")
-        if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge")
-    else:
-        print("Taking bridge down")
-        if ip("link set dev %s down" % bridge): raise Exception("Could not down bridge")
-
-# add interface to bridge and set it up
-def addbridge(ifname):
+# add interface to bridge
+def add(ifname):
     print("Bridging", ifname)
     if ip("link set dev %s master %s up" % (ifname, bridge)):
-        print("Could not add %s" % ifname)
+        print("Could not change %s" % ifname)
 
 print("Auto-bridging interfaces that match %s but not %s" % (str(accept)[1:-1], str(reject)[1:-1]))
 if upstream: print("Upstream interface is %s" % upstream)
 
 # scan existing devices
 got=False       # found bridge device
-isup=None       # upstream device is up
+wasup=None      # upstream device is currently up
 bridged=set()   # currently bridged interfaces
 
 # dump without filter
@@ -104,15 +95,12 @@ if staticip:
     if ip("address add %s dev %s" % (staticip, bridge)):
         raise Exception("Could not set bridge IP")
 
-# init bridge up or down
-if upstream:
-    if isup is None: print("Warning, upstream interface does not exist")
-    upbridge(isup)
-else:
-    upbridge(True)
+if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge")
+
+if wasup is None: print("Warning, upstream interface does not exist")
 
 # bridge existing interfaces
-for i in bridged: addbridge(i)
+for i in bridged: add(i)
 
 # now wait for changes, this loops forever
 for i in nl.wait(accept=accept, reject=reject):
@@ -124,11 +112,16 @@ for i in nl.wait(accept=accept, reject=reject):
     elif i.ifname not in bridged:
         # a new device
         bridged.add(i.ifname)
-        addbridge(i.ifname)
+        add(i.ifname)
 
-    # bridge follows the state of the upstream device
+    # track upstream interfaace state
     if i.ifname == upstream:
-        up = i.attached and i.carrier and i.up
-        if up != isup:
-            upbridge(up)
-            isup = up
+        isup = i.attached and i.carrier and i.up
+        if isup != wasup:
+            print(upstream,"is","up" if isup else "down")
+            if isup:
+                # toggle bridge down and up, this should wake dhcpcd
+                print("Cycling",bridge)
+                if ip("link set dev %s down" % bridge): raise Exception("Could not down bridge")
+                if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge")
+            wasup = isup
