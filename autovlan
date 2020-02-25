@@ -2,8 +2,6 @@
 #Note unbuffered output
 
 import os, sys, subprocess, rtnl
-from fnmatch import fnmatch
-from time import sleep
 from getopt import getopt
 
 usage="""
@@ -35,34 +33,30 @@ except Exception as e:
     print (str(e), usage, file=sys.stderr)
     quit(1)
 
-# return list of network interfaces, scraped from sysfs
-def interfaces(): return os.listdir('/sys/class/net')
-
 # execute the 'ip' command with given command line
 def ip(cmd): return subprocess.call(["ip"] + cmd.split())
 
 print("Applying vlan ID %s to interfaces that match %s but not %s" % (vlanid, str(accept)[1:-1], str(reject)[1:-1]))
 
+# open the netlink object
+nl=rtnl.rtnl()
+
 vlan=set() # interfaces that we have vlan'd (or failed to)
 
-nl=rtnl.rtnl(accept=accept, reject=reject)
-nl.dump() # initially dump all existing interfaces
+# First find existing vlan.* devices
+for i in nl.dump(accept=["vlan.?*"]):
+    print("Found an existing %s" % i.ifname)
+    vlan.add(i.ifname[5])
 
-for event in nl.read():
-
-    if not event: continue # ignore end of dump
-
-    if not event.attached:
-        vlan.discard(event.ifname)
-    elif event.ifname not in vlan:
-        v="vlan.%s" % event.ifname
-        if v not in interfaces():
-            print("Creating vlan %s" % v)
-            # up the interface first
-            if ip("link set dev %s up" % event.ifname):
-                print("Could not bring %s up, ignoring it" % event.ifname)
-            elif ip("link add link %s name %s type vlan id %s" % (event.ifname, v, vlanid)):
-                print("Could not create %s, ignoring %s" % (v, event.ifname))
-        else:
-            print("Using existing vlan %s" % v)
-        vlan.add(event.ifname)
+for i in nl.wait(accept=accept, reject=reject):
+    if not i.attached:
+        vlan.discard(i.ifname)
+    elif i.ifname not in vlan:
+        vname="vlan."+i.ifname
+        print("Creating vlan %s" % vname)
+        # make sure the interface is up first
+        if ip("link set dev %s up" % i.ifname):
+            print("Could not bring %s up" % i.ifname)
+        elif ip("link add link %s name %s type vlan id %s" % (i.ifname, vname, vlanid)):
+            print("Could not create %s" % vname)
+        vlan.add(i.ifname)
