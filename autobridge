@@ -4,7 +4,7 @@
 import os, sys
 from getopt import getopt
 import subprocess
-import rtnl
+import netlink
 
 usage="""
 Usage:
@@ -60,7 +60,7 @@ except Exception as e:
 print("Using bridge %s" % bridge)
 
 # create the netlink object
-nl=rtnl.rtnl()
+nl=netlink.netlink()
 
 # set bridge up or down
 def upbridge(up):
@@ -82,7 +82,7 @@ if upstream: print("Upstream interface is %s" % upstream)
 
 # scan existing devices
 got=False       # found bridge device
-isup=False      # upstream device is up
+isup=None       # upstream device is up
 bridged=set()   # currently bridged interfaces
 
 for i in nl.dump(accept=[accept,bridge], reject=reject):
@@ -90,7 +90,7 @@ for i in nl.dump(accept=[accept,bridge], reject=reject):
         got=True
     else:
         bridged.add(i.ifname)
-        if i.ifname is upstream and i.carrier is not None: isup = i.up and i.carrier
+        if i.ifname is upstream: isup = i.up and i.carrier
 
 if not got:
     print("Creating %s" % bridge)
@@ -104,7 +104,11 @@ if staticip:
         raise Exception("Could not set bridge IP")
 
 # init bridge up or down
-upbridge(isup or not upstream)
+if upstream:
+    if isup is None: print("Warning, upstream interface does not exist")
+    upbridge(isup)
+else:
+    upbridge(True)
 
 # bridge existing interfaces
 for i in bridged: addbridge(i)
@@ -120,7 +124,7 @@ for i in nl.wait(accept=accept, reject=reject):
         addbridge(i.ifname)
 
     # bridge follows the state of the upstream device
-    if i.ifname is upstream and i.carrier is not None:
+    if i.ifname is upstream:
         up = i.attached and i.carrier and i.up
         if up != isup:
             upbridge(up)

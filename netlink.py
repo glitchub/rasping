@@ -1,10 +1,18 @@
 from __future__ import print_function
 import os, struct, socket, time, select, fnmatch
+# receive network interface status via netlink
 
 # python2 doesn't support monotonic time, use the wall clock for timeouts
 if 'monotonic' not in dir(time): time.monotonic=time.time
 
-# event is just a container
+# return true if string s matches any listed glob
+def matches(s, globs):
+    for g in globs:
+        if fnmatch.fnmatch(s, g):
+            return True
+    return False
+
+# returned by netlink.dump or netlink.wait, this just a container for the interface data
 class event():
     def __init__(self, nlmsg, ifi, iff, ifla):
         self.nlmsg=nlmsg
@@ -12,21 +20,20 @@ class event():
         self.iff=iff
         self.ifla=ifla
 
-        # create some short hand accessors
-        self.attached = nlmsg["type"]==16 # RTM_NEWLINK
+        # create some shortcut accessors
         self.ifname = ifla["ifname"]
+        self.attached = nlmsg["type"]==16 # RTM_NEWLINK
         self.up = iff["up"]
-        c = ifla.get("carrier")
-        self.carrier = None if c is None else bool(c)
+        self.carrier = None if "carrier" not in ifla else bool(ifla["carrier"])
 
-class rtnl():
-    # The nlmsg_xxx symbols from netlink.h, minus the "nlmsg_"
+class netlink():
+    # nlmsg_xxx symbols from netlink.h, minus the "nlmsg_"
     _nlmsg_fields = [ "len", "type", "flags", "seq", "pid" ]
 
-    # The ifi_xxx symbols from rtnetlink.h, minus the "ifi_"
+    # ifi_xxx symbols from rtnetlink.h, minus the "ifi_"
     _ifi_fields = [ "family", "type", "index", "flags", "changes" ]
 
-    # Lowercase versions if IFLA_XXX symbols from if_link.h, minus the "IFLA_"
+    # Lowercase versions of IFLA_XXX symbols from if_link.h, minus the "IFLA_"
     _ifla_fields = [ "none", "address", "broadcast", "ifname", "mtu", "link",
                      "qdisc", "stats", "cost", "priority", "master",
                      "wireless", "protinfo", "txqlen", "map", "weight",
@@ -61,13 +68,6 @@ class rtnl():
         self.sock=socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, socket.NETLINK_ROUTE)
         self.sock.bind((os.getpid(),1)) # RTMGRP_LINK messages
 
-    # return true if string s matches any listed glob
-    def _matches(self, s, globs):
-        for g in globs:
-            if fnmatch.fnmatch(s, g):
-                return True
-        return False
-
     # process data as netlink attributes and return ifla dict, or None
     def _attributes(self, data):
         if len(data) <= 4: return None
@@ -85,12 +85,11 @@ class rtnl():
                 field = self._ifla_fields[nla_type]
 
                 if field in ["address", "broadcast"]:
-                    ifla[field] = ":".join(list("%02X" % c for c in list(bytearray(data[4:nla_len])))) # colon-separated octets
-                elif field is "ifname":
-                    ifname = data[4:nla_len].split(b"\x00")[0].decode("ascii") # 0-terminated string
-                    ifla["ifname"] = ifname
-                elif field is "ifalias":
-                    ifla[field] = data[4:nla_len].split(b"\x00")[0].decode("ascii") # 0-terminated string
+                    # colon-separated octets
+                    ifla[field] = ":".join(list("%02X" % c for c in list(bytearray(data[4:nla_len]))))
+                elif field in ["ifname", "ifalias"]:
+                    # NUL-terminated string
+                    ifla[field] = data[4:nla_len].split(b"\x00")[0].decode("ascii")
                 elif field is "stats":
                     # struct rtnl_link_stats, 24 unsigned ints
                     # don't overwrite existing "stats"
@@ -100,7 +99,7 @@ class rtnl():
                     # always overwrite existing "stats"
                     ifla["stats"] = dict(zip(self._stat_fields, struct.unpack("=24Q", data[4:nla_len])))
                 elif field in ["phy_port_id", "phys_switch_id"]:
-                    # data is raw hex
+                    # raw hex
                     ifla[field] = data[4:nla_len].hex()
                 elif nla_len == 5:
                     # generic 8-bit data
@@ -116,14 +115,13 @@ class rtnl():
 
         return ifla
 
-    # Wait for a netlink event. Note this is an iterator, use with "for".
-
-    # If timeout (seconds) is specified, exits if no event reported within
-    # that time (raises StopIteration).
-
-    # Accept and reject are lists of globs, only interfaces that match an
-    # accept glob are returned unless they also match a reject glob.
-    def wait(self, timeout=None, accept=['*'], reject=[]):
+    # Wait for a netlink event.  Note this is an iterator, use with "for".  If
+    # timeout (seconds) is specified, exits if no event reported within that
+    # time (raises StopIteration). If strict is set, do not return events that
+    # don't specify carrier state. Accept and reject are lists of globs, only
+    # interfaces that match an accept glob and do not match a reject glob will
+    # be returned, by default returns everything.
+    def wait(self, timeout=None, strict=True, accept=['*'], reject=[]):
         expire = 0
         while True:
             if timeout is not None:
@@ -131,19 +129,19 @@ class rtnl():
                 s = select.select([self.sock],[],[], max(0, expire-time.monotonic()))
                 if not s[0]: return
             data = self.sock.recv(65535)
-            if self.debug: print("Packet = %d bytes" % len(data))
+            if self.debug: print("Netlink packet is %d bytes" % len(data))
 
             while len(data) >= 16:
-                # first 16 bytes is struct nlmsghdr, from netlink.h
-                nlmsg=dict(zip(self._nlmsg_fields, struct.unpack("=LHHLL", data[0:16])))
+                # first 16 bytes is struct nlmsghdr (netlink.h)
+                nlmsg = dict(zip(self._nlmsg_fields, struct.unpack("=LHHLL", data[0:16])))
                 if self.debug: print("nlmsg =", nlmsg)
                 if nlmsg["len"] > len(data): break
 
-                if nlmsg["type"] == 3: return  # NLMSG_DONE (netlink.h)
+                if nlmsg["type"] == 3: return  # NLMSG_DONE, occurs at the end of a dump (netlink.h)
 
-                if len(data) >= 32 and nlmsg["type"] in [16,17]:  # RTM_NEWLINK or RTM_DELLINK from rtnetlink.h
-                    # next 16 bytes is ifinfomsg, from rtnetlink.h
-                    ifi=dict(zip(self._ifi_fields, struct.unpack("=BxHlLL",data[16:32])))
+                if len(data) >= 32 and nlmsg["type"] in [16,17]:  # RTM_NEWLINK or RTM_DELLINK (rtnetlink.h)
+                    # next 16 bytes is ifinfomsg (rtnetlink.h)
+                    ifi = dict(zip(self._ifi_fields, struct.unpack("=BxHlLL",data[16:32])))
                     if self.debug: print("ifi =", ifi)
                     # parse interface flags to iff
                     iff={}
@@ -153,15 +151,17 @@ class rtnl():
                     # process the rest of the packet for netlink attributes
                     ifla = self._attributes(data[32 : nlmsg["len"]])
                     if ifla:
+                        if self.debug: print("ifla =", ifla)
                         ifname=ifla.get("ifname")
                         if not ifname:
                             if self.debug: print("Dropping event without ifname")
-                        elif self._matches(ifname, reject) or not self._matches(ifname, accept):
+                        elif strict and "carrier" not in ifla:
+                            if self.debug: print("Dropping event without carrier")
+                        elif matches(ifname, reject) or not matches(ifname, accept):
                             if self.debug: print("Dropping event from", ifname)
                         else:
-                            if self.debug: print("ifla =", ifla)
                             yield event(nlmsg, ifi, iff, ifla)  # yield an event
-                            expire = 0                          # restarts the timeout
+                            expire = 0                          # restart the timeout
 
                 # advance to next packet, if any
                 data = data[nlmsg["len"]:]
@@ -180,15 +180,15 @@ class rtnl():
         return self.wait(timeout=1, accept=accept, reject=reject)
 
 if __name__ == "__main__":
-    nl=rtnl()   # create the rtnl object
+    nl=netlink()   # create the netlink object
 
     print("Current interfaces:\n")
     for e in nl.dump():
-        print("  %s: attached=%s up=%s carrier=%s" % (e.ifname, e.attached, e.up, e.carrier))
+        print("    %s: attached=%s up=%s carrier=%s" % (e.ifname, e.attached, e.up, e.carrier))
 
     print("\nWaiting for events...\n")
     while True:
-        # Fetch interface events except from lo, timeout after 5 seconds
+        # Return interface events except from lo, timeout after 5 seconds
         active=False
         for e in nl.wait(timeout=5, reject=['lo']):
             print("nlmsg =", str(e.nlmsg))
