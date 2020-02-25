@@ -90,11 +90,11 @@ class netlink():
                 elif field in ["ifname", "ifalias"]:
                     # NUL-terminated string
                     ifla[field] = data[4:nla_len].split(b"\x00")[0].decode("ascii")
-                elif field is "stats":
+                elif field == "stats":
                     # struct rtnl_link_stats, 24 unsigned ints
                     # don't overwrite existing "stats"
                     if not ifla.get("stats"): ifla["stats"]=dict(zip(self._stat_fields, struct.unpack("=24L", data[4:nla_len])))
-                elif field is "stats64":
+                elif field == "stats64":
                     # struct rtnl_link_stats64, same fields fields as stats but 24 unsigned long longs (64-bit),
                     # always overwrite existing "stats"
                     ifla["stats"] = dict(zip(self._stat_fields, struct.unpack("=24Q", data[4:nla_len])))
