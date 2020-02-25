@@ -82,7 +82,7 @@ for i in nl.dump():
         got=True
     elif netlink.matches(i.ifname, accept) and not netlink.matches(i.ifname, reject):
         bridged.add(i.ifname)
-        if i.ifname == upstream: isup = i.up and i.carrier
+        if i.ifname == upstream: wasup = i.up and i.carrier
 
 if not got:
     print("Creating %s" % bridge)
