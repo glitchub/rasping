@@ -106,7 +106,7 @@ for i in bridged: add(i)
 
 # now wait for changes, this loops forever
 for i in nl.wait(accept=accept, reject=reject):
-    if not i.attached:
+    if not i.exists:
         # e.g. usb dongle unplugged
         if i.ifname in bridged:
             print("Forgetting", i.ifname)
@@ -118,7 +118,7 @@ for i in nl.wait(accept=accept, reject=reject):
 
     # track upstream interfaace state
     if i.ifname == upstream:
-        isup = i.attached and i.carrier and i.up
+        isup = i.exists and i.carrier and i.up
         if isup != wasup:
             print(upstream,"is","up" if isup else "down")
             if isup:

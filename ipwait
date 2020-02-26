@@ -1,0 +1,33 @@
+#!/usr/bin/python3 -u
+# Note unbuffered output
+
+import os, sys
+import netlink
+
+usage="""
+Usage:
+
+    ipwait interface
+
+Wait for specified interface to have an IP address, print it and return.
+"""
+
+try:
+    await=sys.argv[1]
+except:
+    print(usage, file=sys.stderr)
+    quit(1)
+
+def got(i):
+    print("%s has address %s/%d" % (i.ifname, i.address, i.prefixlen))
+    quit(0)
+
+# create the netlink object
+nl=netlink.netlink(mode="addresses")
+
+# check if it already exists
+for i in nl.dump(accept=[await]): got(i)
+
+# nope, wait for it
+print("Waiting for %s..." % await)
+for i in nl.wait(accept=[await]): got(i)

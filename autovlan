@@ -73,5 +73,5 @@ for i in nl.dump(accept=accept, reject=reject):
 
 # Wait for new
 for i in nl.wait(accept=accept, reject=reject):
-    if i.attached: add(i.ifname)
+    if i.exists: add(i.ifname)
     else: drop(i.ifname)
