@@ -97,7 +97,7 @@ if staticip:
 
 if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge")
 
-if wasup is None:
+if upstream and wasup is None:
     print("Warning, upstream interface does not exist")
     wasup = False
 
