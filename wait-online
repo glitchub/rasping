@@ -1,8 +1,7 @@
 #!/usr/bin/python3 -u
 # Note unbuffered output
 
-import os, sys
-import netlink
+import sys, netlink
 
 usage="""
 Usage:
@@ -13,21 +12,21 @@ Wait for specified interface to have an IP address, print it and return.
 """
 
 try:
-    await=sys.argv[1]
+    interface = sys.argv[1]
 except:
     print(usage, file=sys.stderr)
     quit(1)
 
 def got(i):
-    print("%s has address %s/%d" % (i.ifname, i.address, i.prefixlen))
+    print("%s has address %s/%d" % (i.ifname, i.address, i.prefix))
     quit(0)
 
-# create the netlink object
+# create netlink object returning IPV4 event
 nl=netlink.netlink(mode=netlink.IPV4)
 
 # check if interface already has an address
-for i in nl.dump(accept=[await]): got(i)
+for i in nl.dump(accept=[interface]): got(i)
 
 # otherwise wait for it
-print("Waiting for %s..." % await)
-for i in nl.wait(accept=[await]): got(i)
+print("Waiting for %s..." % interface)
+for i in nl.wait(accept=[interface]): got(i)
