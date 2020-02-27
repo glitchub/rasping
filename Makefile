@@ -333,11 +333,11 @@ ifdef INSTALL
 	echo 'ExecStart=${PWD}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},-u${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
-        echo 'Also=autobridge-wait-online.service' >> $@
+	echo 'Also=autobridge-wait-online.service' >> $@
 endif
 
-# Detect when designated downstream port has IP, to support the systemd
-# "Wants=network-online.target"
+# This detects when the designated downstream port has IP, to support any
+# services with "Wants=network-online.target" (e.g. pionic)
 /lib/systemd/system/autobridge-wait-online.service:
 	rm -f $@
 ifdef INSTALL
