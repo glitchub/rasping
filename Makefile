@@ -140,7 +140,6 @@ else
 	systemctl mask dnsmasq || true
 endif
 	systemctl enable rasping.autobridge
-	systemctl enable rasping.wait-online
 ifdef LAN_VLAN
 	systemctl enable rasping.autovlan
 endif
