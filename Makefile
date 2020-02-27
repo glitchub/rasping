@@ -92,6 +92,7 @@ FILES += /etc/issue.d/rasping.issue
 FILES += /etc/sysctl.d/rasping.conf
 FILES += /lib/systemd/system/autobridge.service
 FILES += /lib/systemd/system/autovlan.service
+FILES += /lib/systemd/system/autobridge-wait-online.service
 .PHONY: ${FILES}
 
 # NO RULES ABOVE THIS POINT
@@ -103,13 +104,14 @@ default: ${FILES}
 ${FILES}: down              # remove files, but take down the system first
 down: legacy
 	systemctl disable autobridge || true
+	systemctl disable autobridge-wait-online || true
 	systemctl disable autovlan || true
 	systemctl disable wpa_supplicant || true
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
 	systemctl disable dnsmasq || true
 	systemctl mask dnsmasq || true
-	raspi-config nonint do_boot_wait 0 # 0==enable
+	raspi-config nonint do_boot_wait 0 # enable
 
 else
 # installing
@@ -138,10 +140,11 @@ else
 	systemctl mask dnsmasq || true
 endif
 	systemctl enable autobridge
+	systemctl enable autobridge-wait-online
 ifdef LAN_VLAN
 	systemctl enable autovlan
 endif
-	raspi-config nonint do_boot_wait 1 # 1 == disable
+	raspi-config nonint do_boot_wait 1 # disable
 	@echo 'INSTALL COMPLETE'
 
 ${FILES}: packages          # install packages before files
@@ -330,6 +333,23 @@ ifdef INSTALL
 	echo 'ExecStart=${PWD}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},-u${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
+endif
+
+# Detect when designated downstream port is up
+/lib/systemd/system/autobridge-wait-online.service:
+	rm -f $@
+ifdef INSTALL
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo "[Unit]" >> $@
+	echo "Description=Wait for Raspberry Pi NAT Gateway upstream interface" >> $@
+	echo "DefaultDependencies=no" >> $@
+	echo "Before=network-online.target" >> $@
+	echo "[Service]" >> $@
+	echo "Type=onshot" >> $@
+	echo "ExecStart=${PWD}/wait-online ${WANIF}" >> $@
+	echo "RemainAfterExit=yes" >> $@
+	echo "[Install]" >> $@
+	echo "WantedBy=network.online.target" >> $@
 endif
 
 # Enable autovlan
