@@ -90,9 +90,9 @@ FILES += /etc/dhcpcd.conf
 FILES += /etc/dnsmasq.d/rasping.conf
 FILES += /etc/issue.d/rasping.issue
 FILES += /etc/sysctl.d/rasping.conf
-FILES += /lib/systemd/system/autobridge.service
-FILES += /lib/systemd/system/autovlan.service
-FILES += /lib/systemd/system/autobridge-wait-online.service
+FILES += /lib/systemd/system/rasping.autobridge.service
+FILES += /lib/systemd/system/rasping.autovlan.service
+FILES += /lib/systemd/system/rasping.wait-online.service
 .PHONY: ${FILES}
 
 # NO RULES ABOVE THIS POINT
@@ -103,9 +103,9 @@ ifndef INSTALL
 default: ${FILES}
 ${FILES}: down              # remove files, but take down the system first
 down: legacy
-	systemctl disable autobridge || true
-	systemctl disable autobridge-wait-online || true
-	systemctl disable autovlan || true
+	systemctl disable rasping.autobridge || true
+	systemctl disable rasping.wait-online || true
+	systemctl disable rasping.autovlan || true
 	systemctl disable wpa_supplicant || true
 	systemctl disable hostapd || true
 	systemctl mask hostapd || true
@@ -139,10 +139,10 @@ else
 	systemctl disable dnsmasq || true
 	systemctl mask dnsmasq || true
 endif
-	systemctl enable autobridge
-	systemctl enable autobridge-wait-online
+	systemctl enable rasping.autobridge
+	systemctl enable rasping.wait-online
 ifdef LAN_VLAN
-	systemctl enable autovlan
+	systemctl enable rasping.autovlan
 endif
 	raspi-config nonint do_boot_wait 1 # disable
 	@echo 'INSTALL COMPLETE'
@@ -159,6 +159,8 @@ endif
 legacy:
 	rm -f /etc/network/interfaces.d/rasping
 	rm -f /etc/systemd/network/rasping*
+	rm -f /lib/systemd/system/autobridge*
+	rm -f /lib/systemd/system/autovlan*
 	systemctl disable systemd-networkd || true
 
 # configure NAT, block everything on the WAN except as defined by UNBLOCK or FORWARD
@@ -322,28 +324,28 @@ ifdef INSTALL
 endif
 
 # Enable autobridge of bridgable interfaces
-/lib/systemd/system/autobridge.service:
+/lib/systemd/system/rasping.autobridge.service:
 	rm -f $@
 ifdef INSTALL
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Unit]' >> $@
-	echo 'Description=Raspberry Pi NAT Gateway autobridge service' >> $@
+	echo 'Description=Rasping autobridge service' >> $@
 	echo 'Before=hostapd.service dncpcd.service' >> $@
 	echo '[Service]' >> $@
 	echo 'ExecStart=${PWD}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},-u${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
-	echo 'Also=autobridge-wait-online.service' >> $@
+	echo 'Also=rasping.wait-online.service' >> $@
 endif
 
 # This detects when the designated downstream port has IP, to support any
 # services with "Wants=network-online.target" (e.g. pionic)
-/lib/systemd/system/autobridge-wait-online.service:
+/lib/systemd/system/rasping.wait-online.service:
 	rm -f $@
 ifdef INSTALL
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo "[Unit]" >> $@
-	echo "Description=Wait for Raspberry Pi NAT Gateway upstream interface" >> $@
+	echo "Description=Rasping wait for upstream IP" >> $@
 	echo "DefaultDependencies=no" >> $@
 	echo "Before=network-online.target" >> $@
 	echo "[Service]" >> $@
@@ -355,13 +357,13 @@ ifdef INSTALL
 endif
 
 # Enable autovlan
-/lib/systemd/system/autovlan.service:
+/lib/systemd/system/rasping.autovlan.service:
 	rm -f $@
 ifdef INSTALL
 ifdef LAN_VLAN
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo '[Unit]' >> $@
-	echo 'Description=Raspberry Pi NAT Gateway autovlan service' >> $@
+	echo 'Description=Rasping autovlan service' >> $@
 	echo '[Service]' >> $@
 	echo 'ExecStart=${PWD}/autovlan -xwlan* -xbr* -x${WANIF} * ${LAN_VLAN}' >> $@
 	echo '[Install]' >> $@
