@@ -1,11 +1,8 @@
 #!/usr/bin/python3 -u
 #Note unbuffered output
 
-import os, sys
-from fnmatch import fnmatch
-from time import sleep
+import os, sys, subprocess, netlink
 from getopt import getopt
-import subprocess
 
 usage="""
 Usage:
@@ -21,54 +18,60 @@ Options are:
     be used multiple times.
 """
 
-exclude={'lo'}
-include=set()
+reject={'lo', 'vlan.*'}
+accept=set()
 
 try:
     opts, args = getopt(sys.argv[1:],"x:")
     if len(args) < 2: raise Exception("Must specify at least one pattern and a vlan ID.")
-    include.update(args[:-1])
+    accept.update(args[:-1])
     vlanid=args[-1]
     assert 1 <= int(vlanid) <= 4094
     for opt, arg in opts:
-        if opt == "-x": exclude.add(arg)
+        if opt == "-x": reject.add(arg)
 except Exception as e:
     print (str(e), usage, file=sys.stderr)
     quit(1)
 
-# return list of network interfaces
-def interfaces(): return os.listdir('/sys/class/net')
-
 # execute the 'ip' command with given command line
 def ip(cmd): return subprocess.call(["ip"] + cmd.split())
 
-# return true if string s matches any listed glob
-def matches(s, globs):
-    for g in globs:
-        if fnmatch(s, g):
-            return True
-    return False
+vlan=set() # interfaces that we have vlan'd (or failed to)
 
-print("Applying vlan ID %s to interfaces that match %s but not %s" % (vlanid, str(include)[1:-1], str(exclude)[1:-1]))
+# create vlan for interface
+def add(ifname):
+    vname="vlan."+ifname
+    if vname not in vlan:
+        print("Creating", vname)
+        # take interface up first
+        if ip("link set dev %s up" % i.ifname):
+            print("Could not bring %s up" % i.ifname)
+        elif ip("link add link %s name %s type vlan id %s" % (i.ifname, vname, vlanid)):
+            print("Could not create %s" % vname)
+        vlan.add(vname)
 
-ignore=[] # interfaces that failed to add properly
+# forget vlan for interface
+def drop(ifname):
+    vname="vlan."+ifname
+    if vname in vlan:
+        print("Forgetting",vname)
+        vlan.discard(vname)
 
-while True:
-    current=interfaces()
+print("Applying vlan ID %s to interfaces that match %s but not %s" % (vlanid, str(accept)[1:-1], str(reject)[1:-1]))
 
-    # unignore unplugged interfaces
-    for i in set(ignore) - set(current): ignore.remove(i)
+# open the netlink object
+nl=netlink.netlink()
 
-    for i in current:
-        if matches(i, include) and not matches(i, exclude) and i not in ignore:
-            v="vlan.%s" % i
-            if v not in current:
-                print("Creating vlan %s" % v)
-                # first we have to up the real interface, then the vlan
-                if ip("link set dev %s up" % i):
-                    print("Could not bring %s up, ignoring it" % i)
-                    ignore.append(i)
-                elif ip("link add link %s name %s type vlan id %s" % (i, v, vlanid)):
-                    print("Could not create %s, ignoring %s" % (v, i))
-                    ignore.append(i)
-    sleep(1)
+# First find any existing vlan.* devices so we won't try to create them again
+for i in nl.dump(accept=["vlan.?*"]):
+    print("Inheriting", i.ifname)
+    vlan.add(i.ifname)
+
+# Create vlans for all existing interfaces
+for i in nl.dump(accept=accept, reject=reject):
+    add(i.ifname)
+
+# Wait for new
+for i in nl.wait(accept=accept, reject=reject):
+    if i.exists: add(i.ifname)
+    else: drop(i.ifname)

@@ -1,0 +1,32 @@
+#!/usr/bin/python3 -u
+# Note unbuffered output
+
+import sys, netlink
+
+usage="""
+Usage:
+
+    wait-online interface
+
+Wait for specified interface to have an IP address, print it and return.
+"""
+
+try:
+    interface = sys.argv[1]
+except:
+    print(usage, file=sys.stderr)
+    quit(1)
+
+def got(i):
+    print("%s has address %s/%d" % (i.ifname, i.address, i.prefix))
+    quit(0)
+
+# create netlink object returning IPV4 event
+nl=netlink.netlink(mode=netlink.IPV4)
+
+# check if interface already has an address
+for i in nl.dump(accept=[interface]): got(i)
+
+# otherwise wait for it
+print("Waiting for %s..." % interface)
+for i in nl.wait(accept=[interface]): got(i)

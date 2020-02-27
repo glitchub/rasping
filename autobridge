@@ -2,10 +2,9 @@
 # Note unbuffered output
 
 import os, sys
-from fnmatch import fnmatch
-from time import sleep
 from getopt import getopt
 import subprocess
+import netlink
 
 usage="""
 Usage:
@@ -18,59 +17,75 @@ appear.
 
 Options are:
 
-    -i ip.ad.re.ss/nm - specify static IP for the bridge.
+    -i ip.ad.re.ss/nm - set static IP for the bridge.
 
     -x pattern - interfaces that match this patterm will always be ignored. Can
     be used multiple times.
 
-    -u inteface - define the upstream interface, the bridge will cycle down
-    and up whenever this interface has a carrier up event.
+    -u inteface - bridge state cycles the upstream interface state changes from
+    down to up.
 
 """
-
-# return list of network interfaces
-def interfaces(): return os.listdir('/sys/class/net')
 
 # execute the 'ip' command with given command line
 def ip(cmd): return subprocess.call(["ip"] + cmd.split())
 
-# return true if string s matches any listed glob
-def matches(s, globs):
-    for g in globs:
-        if fnmatch(s, g):
-            return True
-    return False
-
 # parse command line param
-bridge = sys.argv[-1]
-exclude={'lo', bridge}
-include=set()
-upstream=None
-staticip=None
+bridge = sys.argv[-1]   # bridge name
+reject={'lo', bridge}   # set of interfaces to ignore
+accept=set()            # set of interfaces to be bridged
+upstream=None           # upstream interface, if any
+staticip=None           # static IP to apply to bridge, if any
 
 try:
     opts, args = getopt(sys.argv[1:],"u:x:i:")
     if len(args) < 2: raise Exception("Must specify at least one pattern and a bridge name.")
-    include.update(args[:-1])
+    accept.update(args[:-1])
     bridge=args[-1]
     for opt, arg in opts:
         if opt == "-i":
             if staticip: raise Exception("Can't specify -i more than once.")
             staticip = arg
         elif opt == "-x":
-            exclude.add(arg)
+            reject.add(arg)
         elif opt == "-u":
             if upstream: raise Exception("Can't specify -u more than once.")
-            upstream = arg      # remember it
-            include.add(arg)    # also autobridge it
+            upstream = arg     # remember it
+            accept.add(arg)    # also autobridge it
 
 except Exception as e:
-    print (str(e), usage, file=sys.stderr)
+    print(str(e), usage, file=sys.stderr)
     quit(1)
 
 print("Using bridge %s" % bridge)
 
-if bridge not in interfaces():
+# create the netlink object
+nl=netlink.netlink()
+
+# add interface to bridge
+def add(ifname):
+    print("Bridging", ifname)
+    if ip("link set dev %s master %s up" % (ifname, bridge)):
+        print("Could not change %s" % ifname)
+
+print("Auto-bridging interfaces that match %s but not %s" % (str(accept)[1:-1], str(reject)[1:-1]))
+if upstream: print("Upstream interface is %s" % upstream)
+
+# scan existing devices
+got=False       # found bridge device
+wasup=None      # upstream device is currently up
+bridged=set()   # currently bridged interfaces
+
+# dump without filter
+for i in nl.dump():
+    if i.ifname == bridge:
+        got=True
+    elif netlink.matches(i.ifname, accept) and not netlink.matches(i.ifname, reject):
+        bridged.add(i.ifname)
+        if i.ifname == upstream: wasup = i.up and i.carrier
+
+if not got:
+    print("Creating %s" % bridge)
     if ip("link add name %s type bridge" % bridge):
         raise Exception("Could not create bridge")
 
@@ -82,38 +97,33 @@ if staticip:
 
 if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge")
 
-print("Auto-bridging interfaces that match %s but not %s" % (str(include)[1:-1], str(exclude)[1:-1]))
-if upstream: print("Upstream interface is %s" % upstream)
+if upstream and wasup is None:
+    print("Warning, upstream interface does not exist")
+    wasup = False
 
-ignore = [] # Interfaces that failed to add properly
+# bridge existing interfaces
+for i in bridged: add(i)
 
-upcount = None  # Upstream interface up count
+# now wait for changes, this loops forever
+for i in nl.wait(accept=accept, reject=reject):
+    if not i.exists:
+        # e.g. usb dongle unplugged
+        if i.ifname in bridged:
+            print("Forgetting", i.ifname)
+            bridged.discard(i.ifname)
+    elif i.ifname not in bridged:
+        # a new device
+        bridged.add(i.ifname)
+        add(i.ifname)
 
-while True:
-    current=interfaces()
-
-    # unignore interfaces that no longer exist (e.g. unplugged usb)
-    for i in set(ignore) - set(current): ignore.remove(i)
-
-    # add new interfaces to bridge
-    for i in set(current) - set(os.listdir('/sys/class/net/%s/brif' % bridge)):
-        if matches(i, include) and not matches(i, exclude) and not matches(i, ignore):
-            print("Adding %s to bridge" % i)
-            if ip("link set dev %s master %s up" % (i, bridge)):
-                print("Could not add %s, ignoring it" % i)
-                ignore.append(i)
-
-    # Cycle the bridge state whenever upstream interface changes(intended to trigger dhcpcd).
-    if upstream:
-        if upstream in current:
-            with open("/sys/class/net/%s/carrier_up_count" % upstream) as f: u=f.read().strip()
-            if u != upcount:
-                upcount = u
-                print("%s upcount is %s, cycling the bridge" % (upstream, upcount))
+    # track upstream interfaace state
+    if i.ifname == upstream:
+        isup = i.exists and i.carrier and i.up
+        if isup != wasup:
+            print(upstream,"is","up" if isup else "down")
+            if isup:
+                # toggle bridge down and up, this should wake dhcpcd
+                print("Cycling",bridge)
                 if ip("link set dev %s down" % bridge): raise Exception("Could not down bridge")
                 if ip("link set dev %s up" % bridge): raise Exception("Could not up bridge")
-        else:
-            upcount = None
-
-    # Repeat every second
-    sleep(1)
+            wasup = isup
