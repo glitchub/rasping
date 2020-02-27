@@ -12,7 +12,51 @@ def matches(s, globs):
             return True
     return False
 
-# returned for link events
+# Used to request the netlink type, RTMGRP_XXX constants from rtnetlink.h
+LINK = 0x01 # RTMGRP_LINK
+IPV4 = 0x10 # RTMGRP_IPV4_IFADDRS
+
+# Fields in struct nlmsghdr minus the "nlmsg_" (netlink.h)
+_nlmsg_struct = [ "len", "type", "flags", "seq", "pid" ]
+
+# Fields in struct ifinfomsg, minus the "ifi_" (rtnetlink.h)
+_ifi_struct = [ "family", "type", "index", "flags", "changes" ]
+
+# Bits in ifi_flags, starting with the LSB (if_link.h)
+_iff_bits = [ "up", "broadcast", "debug", "loopback", "pointopoint",
+              "notrailers", "running", "noarp", "promisc", "allmulti",
+              "master", "slave", "multicast", "portsel", "automedia",
+              "dynamic", "lower_up", "dormant", "echo" ]
+
+# Lowercase versions of IFLA_XXX enums, minus the "IFLA_" (if_link.h)
+ifla_enum = [ "unspec", "address", "broadcast", "ifname", "mtu", "link",
+              "qdisc", "stats", "cost", "priority", "master", "wireless",
+              "protinfo", "txqlen", "map", "weight", "operstate", "linkmode",
+              "linkinfo", "net_ns_pid", "ifalias", "num_vf", "vfinfo_list",
+              "stats64", "vf_ports", "port_self", "af_spec", "group",
+              "net_ns_fd", "ext_mask", "promiscuity", "num_tx_queues",
+              "num_rx_queues", "carrier", "phys_port_id", "carrier_changes",
+              "phys_switch_id", "link_netnsid", "phys_port_name", "proto_down",
+              "gso_max_segs", "gso_max_size", "pad", "xdp" ]
+
+# Fields in struct rtnl_link_stats64 (if_link.h)
+_stat_struct = [ "rx_packets", "tx_packets", "rx_bytes", "tx_bytes",
+                 "rx_errors", "tx_errors", "rx_dropped", "tx_dropped",
+                 "multicast", "collisions", "rx_length_errors",
+                 "rx_over_errors", "rx_crc_errors", "rx_frame_errors",
+                 "rx_fifo_errors", "rx_missed_errors", "tx_aborted_errors",
+                 "tx_carrier_errors", "tx_fifo_errors", "tx_heartbeat_errors",
+                 "tx_window_errors", "rx_compressed", "tx_compressed",
+                 "rx_nohandler" ]
+
+# Fields in struct ifaddrmsg, minus the "ifa_" (if_addr.h)
+_ifaddrmsg_struct = [ "family", "prefixlen", "flags", "scope", "index" ]
+
+# Lowercase versions of IFA_XXX enums, minus the "IFA_" (if_addr.h)
+ifa_enum = [ "unspec", "address", "local", "label", "broadcast",
+             "anycast", "cacheinfo", "multicast", "flags" ]
+
+# returned for LINK events
 class linkevent():
     def __init__(self, nlmsg, ifi, iff, ifla):
         self.nlmsg=nlmsg
@@ -34,8 +78,8 @@ class linkevent():
             print("    iff       =", str(self.iff))
             print("    ifla      =", str(self.ifla))
 
-# returned for address events
-class addrevent():
+# returned for IPV4 events
+class ipv4event():
     def __init__(self, nlmsg, ifaddrmsg, ifa):
         self.nlmsg = nlmsg
         self.ifaddrmsg = ifaddrmsg
@@ -54,122 +98,83 @@ class addrevent():
             print("    ifa       =", str(self.ifa))
 
 class netlink():
-    # nlmsg_xxx symbols from netlink.h, minus the "nlmsg_"
-    _nlmsg_fields = [ "len", "type", "flags", "seq", "pid" ]
 
-    # ifi_xxx symbols from rtnetlink.h, minus the "ifi_"
-    _ifi_fields = [ "family", "type", "index", "flags", "changes" ]
-
-    # Lowercase versions of IFLA_XXX symbols from if_link.h, minus the "IFLA_"
-    _ifla_fields = [ "unspec", "address", "broadcast", "ifname", "mtu", "link",
-                     "qdisc", "stats", "cost", "priority", "master",
-                     "wireless", "protinfo", "txqlen", "map", "weight",
-                     "operstate", "linkmode", "linkinfo", "net_ns_pid",
-                     "ifalias", "num_vf", "vfinfo_list", "stats64", "vf_ports",
-                     "port_self", "af_spec", "group", "net_ns_fd", "ext_mask",
-                     "promiscuity", "num_tx_queues", "num_rx_queues",
-                     "carrier", "phys_port_id", "carrier_changes",
-                     "phys_switch_id", "link_netnsid", "phys_port_name",
-                     "proto_down", "gso_max_segs", "gso_max_size", "pad", "xdp" ]
-
-    # Fields in struct rtnl_link_stats or rtnl_link_stats64 (if_link.h)
-    _stat_fields = [ "rx_packets", "tx_packets", "rx_bytes", "tx_bytes",
-                     "rx_errors", "tx_errors", "rx_dropped", "tx_dropped",
-                     "multicast", "collisions", "rx_length_errors",
-                     "rx_over_errors", "rx_crc_errors", "rx_frame_errors",
-                     "rx_fifo_errors", "rx_missed_errors", "tx_aborted_errors",
-                     "tx_carrier_errors", "tx_fifo_errors",
-                     "tx_heartbeat_errors", "tx_window_errors",
-                     "rx_compressed", "tx_compressed", "rx_nohandler" ]
-
-    # Bits in ifi_flags, in order starting with LSB
-    _iff_bits = [ "up", "broadcast", "debug", "loopback", "pointopoint",
-                  "notrailers", "running", "noarp", "promisc", "allmulti",
-                  "master", "slave", "multicast", "portsel", "automedia",
-                  "dynamic", "lower_up", "dormant", "echo" ]
-
-    # Fields in struct ifaddrmsg, minus the "ifa_"
-    _ifaddrmsg_fields = [ "family", "prefixlen", "flags", "scope", "index" ]
-
-    # Lowercase versions if IFA_XXX symbols from if_link.h, minus the "IFA_"
-    _ifa_fields = [ "unspec", "address", "local", "label", "broadcast",
-                    "anycast", "cacheinfo", "multicast", "flags" ]
-
-    # Open the netlink socket, debug flag spews stuff to stdout.
-    # Mode is "links", "addresses", or "both". Default is "links". Only the
-    # first character actually matters.
-    def __init__(self, mode="links", debug=0):
+    # Open the netlink socket.
+    # Mode defines what kind of event packets to be returned, must be LINK,
+    # IPV4, or LINK|IPV4. Default is LINK.
+    # Debug spews to stderr, higher numbers == more spew.
+    def __init__(self, mode=LINK, debug=0):
+        self.mode=mode
+        if mode not in [LINK, IPV4, LINK|IPV4]: raise Exception("Must specify mode=LINK, mode=IPV4, or mode=LINK|IPV4")
         self.debug=debug
-        self.mode=mode[0]
-        if self.mode not in ["l","a","b"]: raise Exception('Must specify mode="l", mode="a", or mode="b"')
 
         self.sock=socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, socket.NETLINK_ROUTE)
-        self.sock.bind((os.getpid(), (0 if self.mode[0] == "a" else 1) | (0 if self.mode[0] == "l" else 0x10))) # RTMGRP_LINK, RTMGRP_IPV4_IFADDRS
+        self.sock.bind((os.getpid(), self.mode))
 
     def _debug(self, *args, level=1):
         if self.debug >= level: print(args, file=sys.stderr )
 
-    # process ifla attribute and return { field, data }, or None
+    # process ifla attribute and return { name: value }, or None
     def _parse_ifla(self, nla_type, data):
-        if nla_type >= len(self._ifla_fields):
+        if nla_type >= len(ifla_enum):
             self._debug("Invalid IFLA nla_type", type)
             return None
 
-        field = self._ifla_fields[nla_type]
+        name = ifla_enum[nla_type]
 
-        if field in ["address", "broadcast"]:
+        if name in ["address", "broadcast"]:
             # colon-separated hex octets
-            return { field : ":".join(list("%02X" % c for c in list(bytearray(data)))) }
+            return { name : ":".join(list("%02X" % c for c in list(bytearray(data)))) }
 
-        if field in ["ifname", "ifalias", "qdisc"]:
+        if name in ["ifname", "ifalias", "qdisc"]:
             # NUL-terminated string
-            return { field : data.split(b"\x00")[0].decode("ascii") }
+            return { name : data.split(b"\x00")[0].decode("ascii") }
 
-        if field == "stats64":
-            # struct rtnl_link_stats64, 24 unsigned long longs (64-bit), call it "stats"
-            return { "stats": dict(zip(self._stat_fields, struct.unpack("=24Q", data))) }
+        if name == "stats64":
+            # rtnl_link_stats64 is 24 unsigned long longs (64-bit), call it "stats"
+            return { "stats": dict(zip(_stat_struct, struct.unpack("=24Q", data))) }
 
-        if field in ["phy_port_id", "phys_switch_id"]:
+        if name in ["phy_port_id", "phys_switch_id"]:
             # raw hex
-            return { field : data.hex() }
+            return { name : data.hex() }
 
         if len(data) == 1:
             # generic 8-bit data
-            return { field : struct.unpack("B", data)[0] }
+            return { name : struct.unpack("B", data)[0] }
 
         if len(data) == 4:
             # generic 32-bit data
-            return { field : struct.unpack("=L", data)[0] }
+            return { name : struct.unpack("=L", data)[0] }
 
-        self._debug("Don't know how to decode IFLA_%s" % field.upper())
+        self._debug("Don't know how to decode IFLA_%s" % name.upper(), level=2)
 
         return None
 
-    # process ifa_attribute and { field: value } or None
+    # process ifa attribute and return { name: value } or None
     def _parse_ifa(self, nla_type, data):
-        if nla_type >= len(self._ifa_fields):
+        if nla_type >= len(ifa_enum):
             self._debug("Invalid IFA nla_type", type)
             return None
 
-        field = self._ifa_fields[nla_type]
+        name = ifa_enum[nla_type]
 
-        if field in ["address", "local", "broadcast", "anycast", "multicast" ]:
+        if name in ["address", "local", "broadcast", "anycast", "multicast" ]:
             # dot-separated decimal octets
-            return { field : ".".join(list("%d" % c for c in list(bytearray(data)))) }
+            return { name : ".".join(list("%d" % c for c in list(bytearray(data)))) }
 
-        if field == "label":
+        if name == "label":
             # NUL-terminated string
-            return { field : data.split(b"\x00")[0].decode("ascii") }
+            return { name : data.split(b"\x00")[0].decode("ascii") }
 
         if len(data) == 1:
             # generic 8-bit data
-            return { field : struct.unpack("B", data)[0] }
+            return { name : struct.unpack("B", data)[0] }
 
         if len(data) == 4:
             # generic 32-bit data
-            return { field : struct.unpack("=L", data)[0] }
+            return { name : struct.unpack("=L", data)[0] }
 
-        self._debug("Don't know how to decode IFA_%s" % field.upper())
+        self._debug("Don't know how to decode IFA_%s" % name.upper(), level=2)
         return None
 
     # process attribute data with specified parser and return dict
@@ -212,7 +217,7 @@ class netlink():
 
             while len(data) >= 16:
                 # first 16 bytes is struct nlmsghdr (netlink.h)
-                nlmsg = dict(zip(self._nlmsg_fields, struct.unpack("=LHHLL", data[0:16])))
+                nlmsg = dict(zip(_nlmsg_struct, struct.unpack("=LHHLL", data[0:16])))
                 self._debug("nlmsg =", nlmsg)
                 if nlmsg["len"] > len(data): break
 
@@ -221,11 +226,11 @@ class netlink():
 
                 if len(data) >= 32 and nlmsg["type"] in [16,17]:  # RTM_NEWLINK or RTM_DELLINK (rtnetlink.h)
                     # next 16 bytes is ifinfomsg (rtnetlink.h)
-                    ifi = dict(zip(self._ifi_fields, struct.unpack("=BxHlLL",data[16:32])))
+                    ifi = dict(zip(_ifi_struct, struct.unpack("=BxHlLL",data[16:32])))
                     self._debug("ifi =", ifi)
                     # parse interface flags to iff
                     iff={}
-                    for b,v in enumerate(self._iff_bits): iff[v]=bool(ifi["flags"] & (1 << b))
+                    for b,v in enumerate(_iff_bits): iff[v]=bool(ifi["flags"] & (1 << b))
                     self._debug("iff =", iff)
 
                     # process the rest of the packet for netlink attributes
@@ -245,7 +250,7 @@ class netlink():
 
                 elif len(data) >= 24 and nlmsg["type"] in [20, 21]: # RTM_NEWADDR or RTM_DELADDR (rtnetlink.h)
                     # first 8 bytes if struct ifaddrmsg
-                    ifaddrmsg = dict(zip(self._ifaddrmsg_fields, struct.unpack("=BBBBL", data[16:24])))
+                    ifaddrmsg = dict(zip(_ifaddrmsg_struct, struct.unpack("=BBBBL", data[16:24])))
                     self._debug("ifaddrmsg =", ifaddrmsg)
                     ifa = self._attributes(data[24: nlmsg["len"]], self._parse_ifa)
                     if ifa:
@@ -258,43 +263,48 @@ class netlink():
                         elif matches(ifname, reject) or not matches(ifname, accept):
                             self._debug("Dropping addrevent from", ifname)
                         else:
-                            yield addrevent(nlmsg, ifaddrmsg, ifa)  # yield addrevent
+                            yield ipv4event(nlmsg, ifaddrmsg, ifa)  # yield ipv4event
                             expire = 0                              # restart the timeout
 
                 # advance to next packet, if any
                 data = data[nlmsg["len"]:]
 
     # Issue netlink dump command and yield all matching interfaces, then exit
-    # Mode is ignored unless the netlink object was created with mode="both", then it
-    # must "links" or "addrs", default is "links"
-    def dump(self, mode="links", accept=['*'], reject=[]):
-        if self.mode[0] != "b": mode=self.mode
-        if mode[0] not in ["a", "l"]: raise Exception('Must specify mode="l" or mode="a"')
+    # Mode is LINK or IPV4 but only needs to be specified when object was created with support for both.
+    def dump(self, mode=None, accept=['*'], reject=[]):
+        if mode is None: mode=self.mode
+        if mode not in [LINK, IPV4]: raise Exception("Must specify mode=LINK or mode=IPV4")
+        if not mode & self.mode: raise Exception("Netlink not configured for specified mode")
 
         data = struct.pack("=LHHLLL",
-            20,                             # nlmsg_len = total length of packet
-            22 if mode[0]=="a" else 18,     # nlmsg_type = RTM_GETLINK or RTM GETADDR
-            0x0301,                         # nlmsg_flags = NLM_F_ROOT|NLM_F_MATCH|NLM_F_REQUEST
-            1,                              # nlmsg_seq
-            os.getpid(),                    # nlmsg_pid
-            17                              # rtgen_familiy = AF_PACKET
+            20,                         # nlmsg_len = total length of packet
+            18 if mode==LINK else 22,   # nlmsg_type = RTM_GETLINK or RTM GETADDR
+            0x0301,                     # nlmsg_flags = NLM_F_ROOT|NLM_F_MATCH|NLM_F_REQUEST
+            1,                          # nlmsg_seq
+            os.getpid(),                # nlmsg_pid
+            17                          # rtgen_familiy = AF_PACKET
         )
         self.sock.send(data)
         return self.wait(timeout=1, accept=accept, reject=reject)
 
 if __name__ == "__main__":
-    nl=netlink(mode="both")  # create the netlink object
+    nl=netlink(mode=LINK|IPV4)  # create the netlink object
 
-    print("Current interfaces:\n")
-    for e in nl.dump(mode="links"): e.show(verbose=True)
-    for e in nl.dump(mode="addrs"): e.show(verbose=True)
+    print("Current configuration:\n")
+    for e in nl.dump(mode=LINK):
+        e.show(verbose=True)
+        print()
+    for e in nl.dump(mode=IPV4):
+        e.show(verbose=True)
+        print()
 
-    print("\nWaiting for events...\n")
+    print("Waiting for events...\n")
     while True:
-        # Return interface events except from lo, timeout after 5 seconds
+        # Return interface events except from lo, timeout every 5 seconds
         active=False
-        for e in nl.wait(timeout=5, reject=['lo']):
+        for e in nl.wait(timeout=5, strict=False, reject=['lo']):
             e.show(verbose=True)
+            print()
             active=True
         # timeout
         if active:
