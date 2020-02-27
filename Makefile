@@ -353,7 +353,7 @@ ifdef INSTALL
 	echo "ExecStart=${PWD}/wait-online ${WANIF}" >> $@
 	echo "RemainAfterExit=yes" >> $@
 	echo "[Install]" >> $@
-	echo "WantedBy=network.online.target" >> $@
+	echo "WantedBy=network-online.target" >> $@
 endif
 
 # Enable autovlan
