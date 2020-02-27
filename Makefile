@@ -333,9 +333,11 @@ ifdef INSTALL
 	echo 'ExecStart=${PWD}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},-u${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
+        echo 'Also=autobridge-wait-online.service' >> $@
 endif
 
-# Detect when designated downstream port is up
+# Detect when designated downstream port has IP, to support the systemd
+# "Wants=network-online.target"
 /lib/systemd/system/autobridge-wait-online.service:
 	rm -f $@
 ifdef INSTALL
@@ -345,7 +347,7 @@ ifdef INSTALL
 	echo "DefaultDependencies=no" >> $@
 	echo "Before=network-online.target" >> $@
 	echo "[Service]" >> $@
-	echo "Type=onshot" >> $@
+	echo "Type=oneshot" >> $@
 	echo "ExecStart=${PWD}/wait-online ${WANIF}" >> $@
 	echo "RemainAfterExit=yes" >> $@
 	echo "[Install]" >> $@
