@@ -331,7 +331,7 @@ ifdef INSTALL
 	echo 'Description=Rasping autobridge service' >> $@
 	echo 'Before=hostapd.service dncpcd.service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=${PWD}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},-u${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
+	echo 'ExecStart=${CURDIR}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},-u${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 	echo 'Also=rasping.wait-online.service' >> $@
@@ -349,7 +349,7 @@ ifdef INSTALL
 	echo "Before=network-online.target" >> $@
 	echo "[Service]" >> $@
 	echo "Type=oneshot" >> $@
-	echo "ExecStart=${PWD}/wait-online ${WANIF}" >> $@
+	echo "ExecStart=${CURDIR}/wait-online ${WANIF}" >> $@
 	echo "RemainAfterExit=yes" >> $@
 	echo "[Install]" >> $@
 	echo "WantedBy=network-online.target" >> $@
@@ -364,7 +364,7 @@ ifdef LAN_VLAN
 	echo '[Unit]' >> $@
 	echo 'Description=Rasping autovlan service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=${PWD}/autovlan -xwlan* -xbr* -x${WANIF} * ${LAN_VLAN}' >> $@
+	echo 'ExecStart=${CURDIR}/autovlan -xwlan* -xbr* -x${WANIF} * ${LAN_VLAN}' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 endif
