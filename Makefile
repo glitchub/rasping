@@ -103,14 +103,14 @@ ifndef INSTALL
 default: ${FILES}
 ${FILES}: down              # remove files, but take down the system first
 down: legacy
-	systemctl disable rasping.autobridge || true
-	systemctl disable rasping.wait-online || true
-	systemctl disable rasping.autovlan || true
-	systemctl disable wpa_supplicant || true
-	systemctl disable hostapd || true
-	systemctl mask hostapd || true
-	systemctl disable dnsmasq || true
-	systemctl mask dnsmasq || true
+	-systemctl disable rasping.autobridge
+	-systemctl disable rasping.wait-online
+	-systemctl disable rasping.autovlan
+	-systemctl disable wpa_supplicant
+	-systemctl disable hostapd
+	-systemctl mask hostapd
+	-systemctl disable dnsmasq
+	-systemctl mask dnsmasq
 	raspi-config nonint do_boot_wait 0 # enable
 
 else
@@ -119,25 +119,25 @@ else
 default: up
 up: ${FILES}                # bring uip the system, but install files first
 ifdef WAN_SSID
-	rfkill unblock wifi || true
+	-rfkill unblock wifi
 	systemctl enable wpa_supplicant
 else
 	systemctl disable wpa_supplicant
 endif
 ifdef LAN_SSID
-	rfkill unblock wifi || true
+	-rfkill unblock wifi
 	systemctl unmask hostapd
 	systemctl enable hostapd
 else
-	systemctl disable hostapd || true
-	systemctl mask hostapd || true
+	-systemctl disable hostapd
+	-systemctl mask hostapd
 endif
 ifdef LAN_IP
 	systemctl unmask dnsmasq
 	systemctl enable dnsmasq
 else
-	systemctl disable dnsmasq || true
-	systemctl mask dnsmasq || true
+	-systemctl disable dnsmasq
+	-systemctl mask dnsmasq
 endif
 	systemctl enable rasping.autobridge
 ifdef LAN_VLAN
@@ -160,7 +160,7 @@ legacy:
 	rm -f /etc/systemd/network/rasping*
 	rm -f /lib/systemd/system/autobridge*
 	rm -f /lib/systemd/system/autovlan*
-	systemctl disable systemd-networkd || true
+	-systemctl disable systemd-networkd
 
 # configure NAT, block everything on the WAN except as defined by UNBLOCK or FORWARD
 /etc/iptables/rules.v4:
