@@ -351,7 +351,7 @@ ifdef INSTALL
 	echo "Type=oneshot" >> $@
 	echo "ExecStart=${CURDIR}/wait-online ${WANIF}" >> $@
 	echo "RemainAfterExit=yes" >> $@
-        echo "TimeoutSecs=60" >> $@
+	echo "TimeoutSec=60" >> $@
 	echo "[Install]" >> $@
 	echo "WantedBy=network-online.target" >> $@
 endif
