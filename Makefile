@@ -143,6 +143,7 @@ endif
 ifdef LAN_VLAN
 	systemctl enable rasping.autovlan
 endif
+	systemctl enable rasping.wait-online
 	raspi-config nonint do_boot_wait 1 # disable
 	@echo 'INSTALL COMPLETE'
 
@@ -334,7 +335,6 @@ ifdef INSTALL
 	echo 'ExecStart=${CURDIR}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},-u${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
-	echo 'Also=rasping.wait-online.service' >> $@
 endif
 
 # This detects when the designated downstream port has IP, to support any
@@ -351,6 +351,7 @@ ifdef INSTALL
 	echo "Type=oneshot" >> $@
 	echo "ExecStart=${CURDIR}/wait-online ${WANIF}" >> $@
 	echo "RemainAfterExit=yes" >> $@
+        echo "TimeoutSecs=60" >> $@
 	echo "[Install]" >> $@
 	echo "WantedBy=network-online.target" >> $@
 endif
