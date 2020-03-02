@@ -162,6 +162,7 @@ legacy:
 	rm -f /lib/systemd/system/autobridge*
 	rm -f /lib/systemd/system/autovlan*
 	-systemctl disable systemd-networkd
+	-systemctl disable networking
 
 # configure NAT, block everything on the WAN except as defined by UNBLOCK or FORWARD
 /etc/iptables/rules.v4:
