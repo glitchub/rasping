@@ -26,6 +26,7 @@ override WAN_GW:=$(strip ${WAN_GW})
 override WAN_DNS:=$(strip ${WAN_DNS})
 override LAN_CHANNEL:=$(strip ${LAN_CHANNEL})
 override COUNTRY:=$(strip ${COUNTRY})
+override WAIT_ONLINE:=$(strip ${WAIT_ONLINE})
 
 # escape ' -> '\'' in ssid's and passphrases
 override WAN_SSID:=$(subst ','\'',$(strip ${WAN_SSID}))
@@ -142,8 +143,14 @@ endif
 	systemctl enable rasping.autobridge
 ifdef LAN_VLAN
 	systemctl enable rasping.autovlan
+else
+	-systemctl disable rasping.autovlan
 endif
+ifdef WAIT_ONLINE
 	systemctl enable rasping.wait-online
+else
+	-systemctl disable rasping.wait-online
+endif
 	raspi-config nonint do_boot_wait 1 # disable
 	@echo 'INSTALL COMPLETE'
 
@@ -338,11 +345,12 @@ ifdef INSTALL
 	echo 'WantedBy=multi-user.target' >> $@
 endif
 
-# This detects when the designated downstream port has IP, to support any
-# services with "Wants=network-online.target" (e.g. pionic)
+# Detects when the designated downstream port has IP, to support any
+# services with "Wants=network-online.target"
 /lib/systemd/system/rasping.wait-online.service:
 	rm -f $@
 ifdef INSTALL
+ifdef WAIT_ONLINE
 	echo '# Raspberry Pi NAT Gateway' >> $@
 	echo "[Unit]" >> $@
 	echo "Description=Rasping wait for upstream IP" >> $@
@@ -352,9 +360,10 @@ ifdef INSTALL
 	echo "Type=oneshot" >> $@
 	echo "ExecStart=${CURDIR}/wait-online ${WANIF}" >> $@
 	echo "RemainAfterExit=yes" >> $@
-	echo "TimeoutSec=60" >> $@
+	echo "TimeoutSec=${WAIT_ONLINE}" >> $@
 	echo "[Install]" >> $@
 	echo "WantedBy=network-online.target" >> $@
+endif
 endif
 
 # Enable autovlan
