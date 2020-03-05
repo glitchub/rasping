@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -u
-#Note unbuffered output
+# Note, -u unbuffers the output so systemd can log it correctly
 
 import os, sys, subprocess, netlink
 from getopt import getopt
@@ -7,30 +7,40 @@ from getopt import getopt
 usage="""
 Usage:
 
-    autovlan [options] pattern [... pattern] vlanid
+    autovlan [options] vlanid [... vlanid]
 
-Given one or more glob-style network interface name patterns and a vlan id 1 to
-4094, create a vlan for each matching interface.
+Given at least one vlan ID from 1 to 4096, create vlans for each enabled interface.
 
 Options are:
 
-    -x pattern - interfaces that match this patterm will always be ignored. Can
-    be used multiple times.
+    -m pattern - interfaces that match the pattern will be vlan'ed, unless
+    they also match a -x pattern. Can be used multiple times.
+
+    -x pattern - interfaces that match the pattern will never be vlan'ed, even
+    if they match a -m pattern. Can be used multiple times.
+
+AT least one -m pattern is required.
 """
 
+vlanids=set()
 reject={'lo', 'vlan.*'}
 accept=set()
 
 try:
-    opts, args = getopt(sys.argv[1:],"x:")
-    if len(args) < 2: raise Exception("Must specify at least one pattern and a vlan ID.")
-    accept.update(args[:-1])
-    vlanid=args[-1]
-    assert 1 <= int(vlanid) <= 4094
+    opts, args = getopt(sys.argv[1:],"m:x:")
+    if not args: raise Exception("Must specify at least one vlan ID")
     for opt, arg in opts:
-        if opt == "-x": reject.add(arg)
+        if opt == "-m": accept.add(arg)
+        elif opt == "-x": reject.add(arg)
 except Exception as e:
     print (str(e), usage, file=sys.stderr)
+    quit(1)
+
+try:
+    vlanids.update([int(a,0) for a in args]) # allow hex or decimal
+    for vlanid in vlanids: assert 1 <= vlanid <= 4094
+except Exception as e:
+    print(str(e),"Vlan ID is invalid or not in range 1-4094")
     quit(1)
 
 # execute the 'ip' command with given command line
@@ -38,26 +48,28 @@ def ip(cmd): return subprocess.call(["ip"] + cmd.split())
 
 vlan=set() # interfaces that we have vlan'd (or failed to)
 
-# create vlan for interface
+# create vlan(s) for interface
 def add(ifname):
-    vname="vlan."+ifname
-    if vname not in vlan:
-        print("Creating", vname)
-        # take interface up first
-        if ip("link set dev %s up" % i.ifname):
-            print("Could not bring %s up" % i.ifname)
-        elif ip("link add link %s name %s type vlan id %s" % (i.ifname, vname, vlanid)):
-            print("Could not create %s" % vname)
-        vlan.add(vname)
+    for vlanid in vlanids:
+        vname="vlan.%d.%s" % (vlanid, ifname)
+        if vname not in vlan:
+            print("Creating", vname)
+            # take interface up first
+            if ip("link set dev %s up" % i.ifname):
+                print("Could not bring %s up" % i.ifname)
+            elif ip("link add link %s name %s type vlan id %s" % (i.ifname, vname, vlanid)):
+                print("Could not create %s" % vname)
+            vlan.add(vname)
 
-# forget vlan for interface
+# forget vlan(s) for interface
 def drop(ifname):
-    vname="vlan."+ifname
-    if vname in vlan:
-        print("Forgetting",vname)
-        vlan.discard(vname)
+    for vlanid in vlanids:
+        vname="vlan.%d.%s" % (vlanid, ifname)
+        if vname in vlan:
+            print("Forgetting",vname)
+            vlan.discard(vname)
 
-print("Applying vlan ID %s to interfaces that match %s but not %s" % (vlanid, str(accept)[1:-1], str(reject)[1:-1]))
+print("Applying vlan ID(s) %s to interfaces that match %s but not %s" % (str(vlanids)[1:-1], str(accept)[1:-1], str(reject)[1:-1]))
 
 # open the netlink object
 nl=netlink.netlink()
