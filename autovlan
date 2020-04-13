@@ -9,17 +9,17 @@ Usage:
 
     autovlan [options] vlanid [... vlanid]
 
-Given at least one vlan ID from 1 to 4096, create vlans for each enabled interface.
+Given at least one vlan ID from 1 to 4094, create vlans for interfaces
+specified with -m.
 
 Options are:
 
-    -m pattern - interfaces that match the pattern will be vlan'ed, unless
-    they also match a -x pattern. Can be used multiple times.
+    -m pattern - interfaces that match the pattern will be vlan'ed, unless they
+    also match a -x pattern. Can be used multiple times, must be specified at
+    least once.
 
     -x pattern - interfaces that match the pattern will never be vlan'ed, even
     if they match a -m pattern. Can be used multiple times.
-
-AT least one -m pattern is required.
 """
 
 vlanids=set()
@@ -55,14 +55,14 @@ def add(ifname):
         if vname not in vlan:
             print("Creating", vname)
             # take interface up first
-            if ip("link set dev %s up" % i.ifname):
-                print("Could not bring %s up" % i.ifname)
-            elif ip("link add link %s name %s type vlan id %s" % (i.ifname, vname, vlanid)):
+            if ip("link set dev %s up" % ifname):
+                print("Could not bring %s up" % ifname)
+            elif ip("link add link %s name %s type vlan id %s" % (ifname, vname, vlanid)):
                 print("Could not create %s" % vname)
             vlan.add(vname)
 
 # forget vlan(s) for interface
-def drop(ifname):
+def forget(ifname):
     for vlanid in vlanids:
         vname="vlan.%d.%s" % (vlanid, ifname)
         if vname in vlan:
@@ -75,7 +75,7 @@ print("Applying vlan ID(s) %s to interfaces that match %s but not %s" % (str(vla
 nl=netlink.netlink()
 
 # First find any existing vlan.* devices so we won't try to create them again
-for i in nl.dump(accept=["vlan.?*"]):
+for i in nl.dump(accept=["vlan.*.*"]):
     print("Inheriting", i.ifname)
     vlan.add(i.ifname)
 
@@ -86,4 +86,4 @@ for i in nl.dump(accept=accept, reject=reject):
 # Wait for new
 for i in nl.wait(accept=accept, reject=reject):
     if i.exists: add(i.ifname)
-    else: drop(i.ifname)
+    else: forget(i.ifname)
