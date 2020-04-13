@@ -341,7 +341,7 @@ ifdef INSTALL
 	echo 'Description=Rasping autobridge service' >> $@
 	echo 'Before=hostapd.service dncpcd.service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=${CURDIR}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},-u${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
+	echo 'ExecStart=${CURDIR}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},-u${WANIF}) $(if ${LAN_VLAN},vlan.*.*,*) br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 endif
