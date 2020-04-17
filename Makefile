@@ -313,7 +313,8 @@ ifdef LAN_IP
 	echo 'WAN IP  : \4{${WANIF}}' >> $@
 	echo 'LAN IP  : \4{br0}' >> $@
 else
-	echo 'IP: \4{br0}' >> $@
+	echo 'MAC : '$$(cat /sys/class/net/${WANIF}/address) >> $@
+	echo 'IP  : \4{br0}' >> $@
 endif
 	echo '\e{reset}' >> $@
 endif
@@ -340,7 +341,7 @@ ifdef INSTALL
 	echo 'Description=Rasping autobridge service' >> $@
 	echo 'Before=hostapd.service dncpcd.service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=${CURDIR}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},-u${WANIF}) $(if ${LAN_VLAN},vlan.*,*) br0' >> $@
+	echo 'ExecStart=${CURDIR}/autobridge -xwlan* $(if ${LAN_IP},-i${LAN_IP}/24 -x${WANIF},-u${WANIF}) * br0' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 endif
@@ -375,7 +376,7 @@ ifdef LAN_VLAN
 	echo '[Unit]' >> $@
 	echo 'Description=Rasping autovlan service' >> $@
 	echo '[Service]' >> $@
-	echo 'ExecStart=${CURDIR}/autovlan -xwlan* -xbr* -x${WANIF} * ${LAN_VLAN}' >> $@
+	echo 'ExecStart=${CURDIR}/autovlan -xwlan* -xbr* -x${WANIF} -m* ${LAN_VLAN}' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
 endif
