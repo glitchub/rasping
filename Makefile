@@ -157,7 +157,7 @@ endif
 ${FILES}: packages          # install packages before files
 
 packages: legacy            # purge legacy before packages
-	DEBIAN_FRONTEND=noninteractive apt install -y ${PACKAGES}
+	DEBIAN_FRONTEND=noninteractive apt -oDpkg::Progress-Fancy=0 install -y ${PACKAGES}
 
 endif
 
@@ -389,7 +389,7 @@ clean:
 
 uninstall:
 	${MAKE} INSTALL=
-	DEBIAN_FRONTEND=noninteractive apt remove --autoremove --purge -y ${PACKAGES}
+	DEBIAN_FRONTEND=noninteractive apt -oDpkg::Progress-Fancy=0 remove --autoremove --purge -y ${PACKAGES}
 	@echo 'UNINSTALL COMPLETE'
 
 endif
