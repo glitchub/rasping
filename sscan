@@ -1,113 +1,247 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
-import sys, struct, socket, threading, time, subprocess, platform, traceback
+# MIT License
+#
+# Copyright (c) 2020 Rich Leggitt
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 
-lock=threading.Lock()
-found=0
+"""
+Usage:
 
+    sscan [options] [address[/prefix] [... address[/prefix]]
+
+Quickly scan subnets for active SSH, VNC, and other TCP servers.
+
+Options are:
+
+    -b mS   - milliseconds to wait for banner text, 0 to disable (default 1000)
+    -c mS   - milliseconds to wait for server connect (default 200)
+    -e      - show estimated scan time (default, show only if scan will exceed 1 minute)
+    -h      - show this text
+    -n N    - number of concurrent server connections (default 64)
+    -p port - TCP port to scan (default 22)
+    -v      - alias for '-p5900', search for VNC servers instead of SSH
+
+Subnets are specified in CIDR format "address/prefix". The "/prefix" is
+optional, if not specified then the default is "/32" (i.e. just scan that one
+IP address).
+
+If no subnets are specified, sscan will attempt to determine locally attached
+subnets and scan those.
+
+If some hosts are not detected or intermittently detected, try increasing the
+server connect timeout.
+
+If strange networking errors occur, or the program complains about too many
+open file handles, try reducing the number of concurrent connections.
+
+The overall scan time can by *significantly* reduced by decreasing the server
+connect timeout and/or increasing the number of concurrent connections, but
+note this may provoke the issues described above.
+
+Exit status is 0 if at least one host responded to the scan.
+
+Responding IPs are printed to stdout, followed by the first line of header text
+(unless -h0 was specified). All other messages go to stderr.
+
+Tested on Linux and Windows, also should work with python2.
+
+Examples:
+
+    $ ./sscan
+    Scanning 192.168.0.0/23 for SSH servers...
+      192.168.0.5     : SSH-2.0-OpenSSH_7.4p1 Debian-10+deb9u7
+      192.168.0.3     : SSH-2.0-OpenSSH_7.6
+      192.168.1.143   : SSH-2.0-OpenSSH_7.9p1 Raspbian-10+deb10u2
+    3 servers found
+
+    $ ./sscan -v 10.0.0.0/18 192.168.0.5
+    Scanning 10.0.0.0/18, 192.168.0.5 for VNC servers...
+    Estimated time to scan 16385 hosts: 60.16 seconds
+      192.168.0.5     : RFB 003.008
+    1 server found
+"""
+
+from __future__ import print_function
+import sys, struct, socket, threading, time, subprocess, platform, traceback, getopt
+
+
+port = 22           # port to be scanned
+concurrent = 64     # number of concurrent connections
+connect = 200       # mS to wait for connect
+banner = 1000       # mS to wait for banner
+estimate = False    # show estimated scan time
+
+try:
+    opts, args = getopt.getopt(sys.argv[1:],"b:c:ehn:p:v")
+
+    for opt, arg in opts:
+        if opt == "-b":
+            banner = int(arg)
+            assert 0 <= banner
+        elif opt == "-c":
+            connect = int(arg)
+            assert 0 < connect
+        elif opt == "-e":
+            estimate = True
+        elif opt == "-h":
+            print(__doc__)
+            exit(0)
+        elif opt == "-n":
+            concurrent = int(arg)
+            assert 0 < concurrent
+        elif opt == "-p":
+            port = int(arg)
+            assert 0 < port <= 65535
+        elif opt == "-v":
+            port = 5900
+
+except Exception as e:
+    print (str(e), "\n", __doc__,file = sys.stderr)
+    quit(1)
+
+# Convert dotted-quad to (native) int
+def aton(ip):
+    return struct.unpack(">I", struct.pack("BBBB", *[int(o) for o in ip.split('.')]))[0]
+
+# Convert int to dotted-quad
+def ntoa(n):
+    return "%d.%d.%d.%d" % struct.unpack('BBBB', struct.pack(">I", n))
+
+# Convert str/bytes to str
+def to_str(o):
+    if type(o) is not str: return o.decode('utf-8','ignore')
+    return o
+
+# This is run multiple times as a thread. Try to connect to designated IP
+# address and print message if so. Other than the IP, all parameters are
+# globals.
+found = 0                   # total successful scans
+lock = threading.Lock()     # arbitrate access to 'found'
 def scan(ip):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(.2)
-    if not sock.connect_ex((socket.gethostbyname(ip), 22)):
-        try: s=sock.recv(80)
-        except: s="unknown"
-        global lock, found
+    sock.settimeout(connect/1000.0)
+    if not sock.connect_ex((ip, port)):
+        if banner:
+            sock.settimeout(banner/1000.0) # wait for banner
+            try: s = sock.recv(64)
+            except: s = "(no banner)"
+            s = " : %s" % to_str(s).splitlines()[0]
+        else:
+            s = ""
         lock.acquire()
+        global found
         found += 1
-        print "  " + ip + "\t: "+s.splitlines()[0]
+        print("  %-15s%s" % (ip, s))
         lock.release()
     sock.close()
 
-# iterate all addresses in specified netlist eg "192.168.0.0/24" -> 192.168.0.0, 192.168.0.1, etc
+# Iterate all addresses in specified netlist, e.g. "192.168.0.0/24" will expand to
+# "192.168.0.1", "192.168.0.2", etc
 def netlist(network):
-    if not '/' in network: yield network
+    ip, nm = (network+'/32').split('/')[:2]
+    shift = 32 - int(nm)
+    if not shift: yield ip
     else:
-        network,netmask=network.split('/',1)
-        if netmask == "32": yield network
-        else:
-            shift=32-int(netmask)
-            base=struct.unpack(">I",struct.pack("BBBB",*map(int,network.split('.'))))[0] & (0xffffffff<<shift)
-            # skip first and last IP in range
-            for i in xrange(1,(1<<shift)-1):
-                yield "%d.%d.%d.%d" % struct.unpack('BBBB',struct.pack(">I",base+i))
+        base = aton(ip) & (0xffffffff << shift)
+        # skip first and last IP in the range
+        for i in range(1, (1 << shift) - 1):
+            yield ntoa(base+i)
 
-def expand(a):
-    ip,_,nm = a.partition('/')
-    n=len(ip.split('.'))
-    assert 1 <= n <= 4
-    if (n == 4): return "%s/%s" % (ip, nm or "32")
-    if (n == 3): return "%s.0/%s" % (ip, nm or "24")
-    if (n == 2): return "%s.0.0/%s" % (ip, nm or "16")
-    return "%s.0.0.0/%s" % (ip, nm or "8")
+if args:
+    # Get list of networks from command line
+    networks=[]
+    for n in args:
+        ad, nm = (n+"/32").split('/')[:2]
+        assert 0 < int(nm) <= 32
+        networks.append(socket.gethostbyname(ad)+'/'+nm)
+else:
+    # None given, try to figure it out.
 
-# Return a list of local IPv4 networks
-def localnets():
-    allow=["10.","192.168."]+["172.%d."%n for n in range(16,32)]
-    def allowed(l): return filter(lambda s:s.startswith(tuple(allow)),l)
+    # Filter list for "non-routable" address blocks
+    allow=("10.", "192.168.") + tuple(["172.%d." % n for n in range(16,32)])
+    def nonroutable(l): return [n for n in l if n.startswith(allow)]
+
     try:
         if platform.system().lower().startswith(("windows","cygwin")):
-            # try powershell
-            s=subprocess.check_output(['powershell','-c','get-netroute -addressfamily ipv4 | %{$_.destinationprefix} | select -unique | select-string -notmatch -pattern "/32|/0" | %{$_.tostring()}'])
-            # print s
-            n=allowed(s.splitlines())
-            if len(n): return n
+            # On windows, ask powershell
+            s = subprocess.check_output(['powershell','-c','get-netroute -addressfamily ipv4 | %{$_.destinationprefix} | select -unique | select-string -notmatch -pattern "/32|/0" | %{$_.tostring()}'])
+            networks = nonroutable(to_str(s).splitlines())
         else:
-            # try 'ip route'
-            s=subprocess.check_output("ip -4 route show scope link".split())
-            # print s
-            n=allowed(map(lambda l:l.split()[0], s.splitlines()))
-            if len(n): return n
+            # Otherwise ask 'ip route'
+            s = subprocess.check_output("ip -4 route show scope link".split())
+            networks = nonroutable([l.split()[0] for l in to_str(s).splitlines()])
     except:
-       pass
+        pass
 
-    # try getaddrinfo on localhost
-    s=socket.getaddrinfo(socket.gethostname(),0,2)
-    n=allowed(map(lambda l:"%s/24" % l[4][0], s)) # assume all are /24
-    if len(n): return n
+    if not networks:
+        # Try getaddrinfo
+        s = socket.getaddrinfo(socket.gethostname(),0,2)
+        networks = nonroutable(["%s/24" % l[4][0] for l in s]) # assume all are /24
 
-    # make a dummy udp connection and see what the source address is
-    sock=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-    sock.connect(("8.8.8.8",1))
-    print sock.getpeername(), sock.getsockname()
-    n=allowed([sock.getsockname()[0]+"/24"]) # assume /24
-    sock.close()
-    if len(n): return n;
+    if not networks:
+        # Try making a dummy udp connection and see what the source address is
+        sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        sock.connect(("8.8.8.8",1))
+        networks = nonroutable([sock.getsockname()[0]+"/24"]) # assume /24
+        sock.close()
 
-    raise Exception("Can't find local IPv4 networks, please specify the command line")
-
-if len(sys.argv) > 1:
-    networks=list(expand(i) for i in sys.argv[1:])
-else:
-    networks=localnets()
-
+    if not networks:
+        raise Exception("Can't find local IPv4 networks, please specify on the command line")
 try:
-    print >> sys.stderr, "Scanning", ", ".join(networks), "for open ssh ports..."
-    total=sum(map(lambda s : 1<<(32-int((s+"/32").split("/")[1])), networks))
-    minutes=int(total/(256*60))
-    if minutes: print >> sys.stderr, "Warning, scanning %d hosts may take over %d %s!" % (total, minutes, "minutes" if minutes > 1 else "minute")
+    service = socket.getservbyport(port,'tcp').upper()+' servers'
+except:
+    if port == 5900:
+        service = 'VNC servers'
+    else:
+        service = 'TCP port %d'  % port
+try:
+
+    total = sum([1 << (32 - int((s+"/32").split("/")[1])) for s in networks])
+    seconds = total * (connect + 35) / (concurrent * 1000.0) # assume 35 mS overhead per connect
+    print("Scanning", ", ".join(networks), "for %s..." % service, file=sys.stderr)
+    if estimate or seconds > 60: print("Estimated time to scan %d hosts: %.02f seconds" % (total, seconds), file=sys.stderr)
 
     threads={}
     for n in networks:
         for ip in netlist(n):
-            t=threading.Thread(target=scan, args=(ip,))
+            t = threading.Thread(target=scan, args=(ip,))
             t.start()
-            threads[ip]=t
-            while len(threads) == 64:
-                # don't overflow the arp cache!
-                for k in threads.keys():
+            threads[ip] = t
+            while len(threads) >= concurrent:
+                for k in list(threads):
                     if not threads[k].is_alive():
                         del threads[k]
 
+    # wait for remaining threads to die
     while len(threads):
-        for k in threads.keys():
+        for k in list(threads):
             if not threads[k].is_alive(): del threads[k]
 
-    print (found or "No"), ("host" if found == 1 else "hosts"), "found"
+    print((found or "No"), ("server" if found == 1 else "servers"), "found", file=sys.stderr)
+    exit(found == 0)
 
 except KeyboardInterrupt:
-    print
-    quit(1)
+    print()
+    exit(1)
 
 except Exception:
     traceback.print_exc()
-    quit(1)
+    exit(1)
