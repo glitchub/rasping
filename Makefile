@@ -14,6 +14,11 @@ ifeq ($(shell grep Raspbian.*buster /etc/os-release),)
     $(error Requires raspbian version 10)
 endif
 
+# Define space and comma variables for use in functions
+SPACE =
+SPACE +=
+COMMA = ,
+
 include rasping.cfg
 override LAN_IP:=$(strip ${LAN_IP})
 override LAN_VLAN:=$(strip ${LAN_VLAN})
@@ -27,6 +32,7 @@ override WAN_DNS:=$(strip ${WAN_DNS})
 override LAN_CHANNEL:=$(strip ${LAN_CHANNEL})
 override COUNTRY:=$(strip ${COUNTRY})
 override WAIT_ONLINE:=$(strip ${WAIT_ONLINE})
+override TFTP := $(strip ${TFTP})
 
 # escape ' -> '\'' in ssid's and passphrases
 override WAN_SSID:=$(subst ','\'',$(strip ${WAN_SSID}))
@@ -80,7 +86,7 @@ endif
 endif
 
 # packages to install
-PACKAGES=iptables-persistent dnsmasq hostapd
+PACKAGES=iptables-persistent dnsmasq hostapd tftpd
 
 # files to generate or alter
 FILES = /etc/iptables/rules.v4
@@ -94,6 +100,8 @@ FILES += /etc/sysctl.d/rasping.conf
 FILES += /lib/systemd/system/rasping.autobridge.service
 FILES += /lib/systemd/system/rasping.autovlan.service
 FILES += /lib/systemd/system/rasping.wait-online.service
+FILES += /lib/systemd/system/rasping.tftp.service
+FILES += /lib/systemd/system/rasping.mount.service
 .PHONY: ${FILES}
 
 # NO RULES ABOVE THIS POINT
@@ -150,6 +158,13 @@ ifdef WAIT_ONLINE
 	systemctl enable rasping.wait-online
 else
 	-systemctl disable rasping.wait-online
+endif
+ifdef TFTP
+	systemctl enable rasping.mount
+	systemctl enable rasping.tftp
+else
+	-systemctl disable rasping.mount
+	-systemctl disable rasping.tftp
 endif
 	raspi-config nonint do_boot_wait 1 # disable
 	@echo 'INSTALL COMPLETE'
@@ -379,6 +394,41 @@ ifdef LAN_VLAN
 	echo 'ExecStart=${CURDIR}/autovlan -xwlan* -xbr* -x${WANIF} -m* ${LAN_VLAN}' >> $@
 	echo '[Install]' >> $@
 	echo 'WantedBy=multi-user.target' >> $@
+endif
+endif
+
+/lib/systemd/system/rasping.tftp.service:
+	rm -f $@
+ifdef INSTALL
+ifdef TFTP
+TFTPPATH = /mnt/rasping/$(subst ${SPACE},/,$(strip $(subst /,${SPACE},$(word 2,${TFTP))))
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo '[Unit]' >> $@
+	echo 'Description=Rasping tftp service' >> $@
+	echo 'Requires=tftp.socket' >> $@
+	echo '[Service]' >> $@
+	echo 'ExecStart=/usr/sbin/in.tftpd -s ${TFTPPATH}' >> $@
+	echo 'StandardInput=socket' >> $@
+	echo '[Install]' >> $@
+	echo 'WantedBy=multi-user.target' >> $@
+	echo 'Also=tftp.socket' >> $@
+endif
+endif
+
+/lib/systemd/system/rasping.mount.service:
+	rm -f $@
+ifdef INSTALL
+ifdef TFTP
+TFTPOPTS = $(subst ${SPACE},${COMMA},$(strip ro $(wordlist 3,99,${TFTP})))
+	echo '# Raspberry Pi NAT Gateway' >> $@
+	echo '[Unit]' >> $@
+	echo 'Description=Rasping mount service' >> $@
+	echo 'After=network.target' >> $@
+	echo '[Service]' >> $@
+	echo '[Mount]' >> $@
+	echo 'Where=/mnt/rasping' >> $@
+	echo 'What=$(word 1,${TFTP})' >> $@
+	echo 'Options=${TFTPOPTS}' >> $@
 endif
 endif
 
